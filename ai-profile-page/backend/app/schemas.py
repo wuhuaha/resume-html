@@ -1,0 +1,50 @@
+from pydantic import BaseModel, Field
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ChatRequest(BaseModel):
+    question: str = Field(min_length=1)
+    history: list[ChatMessage] = []
+
+
+class ChatResponse(BaseModel):
+    answer: str
+    sources: list[str]
+    configured: bool
+
+
+class BriefingResponse(BaseModel):
+    meta: dict
+    page: dict
+    hero: dict
+    fitSignals: list[dict]
+    metrics: list[dict]
+    capabilities: list[dict]
+    timeline: list[dict]
+    projects: list[dict]
+    suggestedQuestions: list[str]
+    generated: bool
+    aiConfigured: bool
+
+
+class ExportRequest(BaseModel):
+    jd: str = ""
+    template: str = "ats"
+    direction: str = "语音 AI / 后端系统"
+
+
+class ExportResponse(BaseModel):
+    html: str
+    markdown: str
+    filename: str
+    configured: bool
+    note: str
+
+
+class ReindexResponse(BaseModel):
+    sections: int
+    message: str

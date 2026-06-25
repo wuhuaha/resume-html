@@ -1,0 +1,17 @@
+# Legacy static draft from the earlier resume-only exploration.
+/index.html
+/styles.css
+/output/
+
+# New project generated artifacts and local config.
+ai-profile-page/frontend/node_modules/
+ai-profile-page/frontend/dist/
+ai-profile-page/backend/.venv/
+ai-profile-page/backend/.env
+ai-profile-page/backend/__pycache__/
+ai-profile-page/backend/app/__pycache__/
+ai-profile-page/backend/uploads/
+ai-profile-page/backend/exports/
+ai-profile-page/backend/*.log
+ai-profile-page/.env
+ai-profile-page/*.log

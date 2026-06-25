@@ -1,0 +1,19 @@
+{
+  "name": "ai-profile-page",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 4173",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173"
+  },
+  "dependencies": {
+    "@vicons/ionicons5": "^0.13.0",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "lucide-vue-next": "^0.544.0",
+    "naive-ui": "^2.44.1",
+    "vite": "^7.1.7",
+    "vue": "^3.5.22"
+  }
+}
