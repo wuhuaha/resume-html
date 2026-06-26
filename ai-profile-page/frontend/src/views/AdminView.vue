@@ -1,5 +1,5 @@
 <template>
-  <main class="page-shell compact">
+  <main class="page-shell compact admin-page">
     <nav class="top-nav">
       <a class="brand" href="/">
         <span class="brand-mark">WT</span>
@@ -50,7 +50,7 @@
         </p>
 
         <div class="admin-meta">
-          <span>{{ documentPath || "content/profile.md" }}</span>
+          <span :title="documentPath">{{ displayPath }}</span>
           <span>{{ sectionCount }} 个章节</span>
           <span>{{ markdown.length }} 字符</span>
         </div>
@@ -142,6 +142,10 @@ const file = ref(null);
 const selectedName = ref("");
 
 const adminPassword = computed(() => sessionStorage.getItem(STORAGE_KEY) || password.value);
+const displayPath = computed(() => {
+  if (!documentPath.value) return "content/profile.md";
+  return documentPath.value.split(/[\\/]/).slice(-3).join("/");
+});
 
 onMounted(async () => {
   if (password.value) {
