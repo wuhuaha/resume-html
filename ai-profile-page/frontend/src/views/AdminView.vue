@@ -36,78 +36,94 @@
       </div>
     </section>
 
-    <section v-else class="admin-layout">
-      <div class="workspace-panel">
-        <div class="admin-heading-row">
-          <div>
-            <p class="eyebrow">内容源编辑</p>
-            <h1>维护 Markdown</h1>
-          </div>
+    <template v-else>
+      <header class="admin-page-head">
+        <div>
+          <p class="eyebrow">作者后台</p>
+          <h1>内容维护</h1>
+          <p class="muted-copy">
+            编辑公开页面、AI 问答和简历导出共同使用的资料源。保存后会刷新资料索引。
+          </p>
+        </div>
+        <div class="admin-head-actions">
+          <span :class="['save-state', dirty ? 'is-dirty' : '']">{{ dirty ? "有未保存修改" : "已同步" }}</span>
           <n-button quaternary @click="logout">退出</n-button>
         </div>
-        <p class="muted-copy">
-          当前编辑的是公开页面、AI 问答和导出简历共同使用的资料源。保存后会刷新资料索引。
-        </p>
+      </header>
 
-        <div class="admin-meta">
-          <span :title="documentPath">{{ displayPath }}</span>
-          <span>{{ sectionCount }} 个章节</span>
-          <span>{{ markdown.length }} 字符</span>
-        </div>
+      <section class="admin-layout">
+        <aside class="workspace-panel admin-side-panel">
+          <section class="admin-action-section">
+            <div class="admin-section-heading">
+              <h2>写</h2>
+              <p>保存当前 Markdown，或重新读取内容源。</p>
+            </div>
 
-        <div class="button-row">
-          <n-button type="primary" size="large" :loading="saving" @click="save">
-            <template #icon><Save :size="18" /></template>
-            保存 Markdown
-          </n-button>
-          <n-button size="large" :loading="loading" @click="loadDocument">
-            <template #icon><RefreshCw :size="18" /></template>
-            重新加载
-          </n-button>
-          <n-button size="large" @click="reindex">
-            <template #icon><Settings :size="18" /></template>
-            重建索引
-          </n-button>
-        </div>
+            <div class="button-row">
+              <n-button type="primary" size="large" :loading="saving" @click="save">
+                <template #icon><Save :size="18" /></template>
+                保存
+              </n-button>
+              <n-button size="large" :loading="loading" @click="loadDocument">
+                <template #icon><RefreshCw :size="18" /></template>
+                重新加载
+              </n-button>
+              <n-button size="large" @click="reindex">
+                <template #icon><Settings :size="18" /></template>
+                重建索引
+              </n-button>
+            </div>
+          </section>
 
-        <label class="upload-box">
-          <Upload :size="28" />
-          <span>{{ selectedName || "选择 Word / PDF / Markdown 文件生成草稿" }}</span>
-          <input type="file" accept=".docx,.pdf,.md,.txt" @change="selectFile" />
-        </label>
+          <section class="admin-action-section">
+            <div class="admin-section-heading">
+              <h2>导入</h2>
+              <p>从 Word、PDF 或 Markdown 生成草稿，确认后再保存。</p>
+            </div>
 
-        <n-button
-          block
-          secondary
-          size="large"
-          :disabled="!file"
-          :loading="converting"
-          @click="convert"
-        >
-          <template #icon><FileText :size="18" /></template>
-          转换草稿并放入编辑器
-        </n-button>
+            <label class="upload-box compact-upload">
+              <Upload :size="24" />
+              <span>{{ selectedName || "选择文件" }}</span>
+              <input type="file" accept=".docx,.pdf,.md,.txt" @change="selectFile" />
+            </label>
 
-        <n-alert v-if="status" class="admin-alert" :type="statusType" :bordered="false">
-          {{ status }}
-        </n-alert>
-      </div>
+            <n-button
+              block
+              secondary
+              size="large"
+              :disabled="!file"
+              :loading="converting"
+              @click="convert"
+            >
+              <template #icon><FileText :size="18" /></template>
+              导入到编辑器
+            </n-button>
+          </section>
 
-      <aside class="preview-panel markdown-editor-panel">
-        <div class="preview-toolbar">
-          <div>
-            <p class="eyebrow">Profile Markdown</p>
-            <h2>正式内容</h2>
+          <n-alert v-if="status" class="admin-alert" :type="statusType" :bordered="false">
+            {{ status }}
+          </n-alert>
+        </aside>
+
+        <aside class="preview-panel markdown-editor-panel">
+          <div class="preview-toolbar">
+            <div>
+              <p class="eyebrow">当前文档</p>
+              <h2>{{ displayPath }}</h2>
+            </div>
+            <div class="admin-doc-stats">
+              <span>{{ sectionCount }} 个章节</span>
+              <span>{{ markdown.length }} 字符</span>
+            </div>
           </div>
-          <span :class="['save-state', dirty ? 'is-dirty' : '']">{{ dirty ? "有未保存修改" : "已同步" }}</span>
-        </div>
-        <MarkdownLiteEditor
-          v-model="markdown"
-          placeholder="这里会显示 content/profile.md 的内容。"
-          @update:modelValue="dirty = true"
-        />
-      </aside>
-    </section>
+          <MarkdownLiteEditor
+            v-model="markdown"
+            placeholder="这里会显示 content/profile.md 的内容。"
+            @update:modelValue="dirty = true"
+          />
+        </aside>
+      </section>
+    </template>
   </main>
 </template>
 

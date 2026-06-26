@@ -74,6 +74,10 @@ p {
   width: min(1480px, calc(100% - 48px));
 }
 
+.admin-page .top-nav {
+  margin-bottom: 34px;
+}
+
 .top-nav {
   display: flex;
   align-items: center;
@@ -381,6 +385,15 @@ p {
   margin-top: 4px;
   font-size: 1.36rem;
   line-height: 1.2;
+}
+
+.admin-page .preview-toolbar h2 {
+  max-width: 560px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 1.08rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .workbench-topline .n-tag {
@@ -711,6 +724,33 @@ p {
   gap: 24px;
 }
 
+.admin-page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 4px 0 24px;
+}
+
+.admin-page-head h1 {
+  margin-top: 8px;
+  color: var(--ink);
+  font-size: clamp(2.65rem, 5vw, 4.45rem);
+  line-height: 0.96;
+}
+
+.admin-page-head .muted-copy {
+  max-width: 760px;
+  margin-top: 14px;
+}
+
+.admin-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+
 .workspace-panel,
 .preview-panel {
   padding: 28px;
@@ -718,7 +758,7 @@ p {
 
 .admin-page .workspace-panel {
   align-self: start;
-  padding: 24px;
+  padding: 22px;
 }
 
 .admin-page .preview-panel {
@@ -741,7 +781,6 @@ p {
   margin-top: 28px;
 }
 
-.admin-heading-row,
 .preview-toolbar {
   display: flex;
   align-items: flex-start;
@@ -749,14 +788,13 @@ p {
   gap: 16px;
 }
 
-.admin-meta {
+.admin-doc-stats {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 22px;
 }
 
-.admin-meta span,
+.admin-doc-stats span,
 .save-state {
   display: inline-flex;
   align-items: center;
@@ -770,19 +808,11 @@ p {
   font-weight: 700;
 }
 
-.admin-meta span {
-  max-width: 100%;
-}
-
-.admin-meta span:first-child {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .admin-page .button-row {
   display: grid;
   grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 14px;
 }
 
 .admin-page .button-row .n-button {
@@ -809,6 +839,28 @@ p {
 
 .admin-page .workspace-panel .muted-copy {
   font-size: 0.92rem;
+}
+
+.admin-side-panel {
+  display: grid;
+  gap: 22px;
+}
+
+.admin-action-section + .admin-action-section {
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+}
+
+.admin-section-heading h2 {
+  color: var(--ink);
+  font-size: 1.32rem;
+  line-height: 1.15;
+}
+
+.admin-section-heading p {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .export-form {
@@ -942,6 +994,11 @@ p {
   min-width: 0;
   font-size: 0.82rem;
   font-weight: 800;
+}
+
+.compact-upload {
+  min-height: 108px;
+  margin-top: 14px;
 }
 
 .md-lite-modes button.active {
@@ -1147,8 +1204,9 @@ p {
     grid-template-columns: 1fr;
   }
 
-  .admin-page .workspace-panel h1 {
-    max-width: none;
+  .admin-page-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .admin-page .button-row {
@@ -1168,6 +1226,7 @@ p {
   .nav-actions,
   .workbench-topline,
   .assistant-heading,
+  .admin-head-actions,
   .preview-toolbar,
   .section-title,
   .export-cta {
@@ -1191,6 +1250,10 @@ p {
 
   .hero-copy h1 {
     font-size: clamp(3.2rem, 20vw, 5.4rem);
+  }
+
+  .admin-page-head h1 {
+    font-size: clamp(2.8rem, 16vw, 4.6rem);
   }
 
   .fit-panel,
