@@ -64,6 +64,21 @@ class MarkdownSaveRequest(BaseModel):
     markdown: str = Field(min_length=1)
 
 
+class AdminAiEditRequest(BaseModel):
+    markdown: str = Field(min_length=1)
+    instruction: str = Field(min_length=1)
+
+
+class AdminAiEditResponse(BaseModel):
+    markdown: str
+    note: str
+    configured: bool
+
+
+class AdminPreviewRequest(BaseModel):
+    markdown: str = Field(min_length=1)
+
+
 class ReindexResponse(BaseModel):
     sections: int
     message: str

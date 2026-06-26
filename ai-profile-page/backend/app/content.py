@@ -73,6 +73,11 @@ def section_preview(section: Section) -> str:
 
 def load_profile(path: Path) -> dict[str, Any]:
     raw = read_markdown(path)
+    return parse_profile_markdown(raw)
+
+
+def parse_profile_markdown(markdown_text: str) -> dict[str, Any]:
+    raw = markdown_text
     meta, body = parse_frontmatter(raw)
     sections = parse_sections(body)
 

@@ -9,6 +9,7 @@
 <script setup>
 import { computed } from "vue";
 import { NConfigProvider, NMessageProvider } from "naive-ui";
+import AdminAiView from "./views/AdminAiView.vue";
 import AdminView from "./views/AdminView.vue";
 import ExportView from "./views/ExportView.vue";
 import HomeView from "./views/HomeView.vue";
@@ -18,6 +19,7 @@ const routes = {
   "/": HomeView,
   "/resume/export": ExportView,
   "/admin": AdminView,
+  "/admin/ai": AdminAiView,
 };
 
 const currentView = computed(() => routes[window.location.pathname] || HomeView);

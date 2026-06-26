@@ -8,13 +8,16 @@ from fastapi.responses import HTMLResponse
 
 from .briefing import clear_briefing_cache, generate_briefing
 from .config import settings
-from .content import knowledge_context, load_profile, read_markdown, write_markdown
+from .content import knowledge_context, load_profile, parse_profile_markdown, read_markdown, write_markdown
 from .deepseek import deepseek_client
 from .exporter import local_match_resume, markdown_to_resume_html
 from .importer import upload_to_markdown
 from .schemas import (
+    AdminAiEditRequest,
+    AdminAiEditResponse,
     AdminLoginRequest,
     AdminLoginResponse,
+    AdminPreviewRequest,
     BriefingResponse,
     ChatRequest,
     ChatResponse,
@@ -162,6 +165,50 @@ async def save_markdown(
     return ReindexResponse(sections=len(profile["sections"]), message="Markdown 已保存，资料索引已刷新。")
 
 
+@app.post("/api/admin/ai/edit", response_model=AdminAiEditResponse)
+async def ai_edit_markdown(
+    request: AdminAiEditRequest,
+    _: None = Depends(verify_admin_password),
+) -> AdminAiEditResponse:
+    if not deepseek_client.configured:
+        return AdminAiEditResponse(
+            markdown=request.markdown,
+            note="后端未配置 DeepSeek API Key，无法执行 AI 修改。",
+            configured=False,
+        )
+
+    system_prompt = (
+        "你是作者后台的 Markdown 内容编辑助手。只能编辑用户提供的 Markdown，"
+        "不得新增没有事实依据的经历、公司、时间、数字、奖项或成果。"
+        "必须保留 YAML frontmatter 的 --- 边界和已有事实。"
+        "如果用户要求美化表达，只能重排、精简、补充基于原文可直接推断的表达。"
+        "只输出完整 Markdown，不要解释，不要代码围栏。"
+    )
+    prompt = f"修改指令：\n{request.instruction}\n\n当前 Markdown：\n{request.markdown}"
+    edited = await deepseek_client.chat(
+        [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": prompt},
+        ],
+        settings.deepseek_chat_model,
+    )
+    return AdminAiEditResponse(
+        markdown=strip_markdown_fence(edited),
+        note="已生成 Markdown 草稿。请预览确认后再保存。",
+        configured=True,
+    )
+
+
+@app.post("/api/admin/preview", response_model=BriefingResponse)
+async def preview_briefing(
+    request: AdminPreviewRequest,
+    _: None = Depends(verify_admin_password),
+) -> BriefingResponse:
+    profile = parse_profile_markdown(request.markdown)
+    briefing = await generate_briefing(profile)
+    return BriefingResponse(**briefing)
+
+
 @app.post("/api/admin/import")
 async def import_document(
     file: UploadFile = File(...),
@@ -179,6 +226,19 @@ async def reindex(_: None = Depends(verify_admin_password)) -> ReindexResponse:
     clear_briefing_cache()
     profile = profile_data()
     return ReindexResponse(sections=len(profile["sections"]), message="资料索引已重建。")
+
+
+def strip_markdown_fence(text: str) -> str:
+    cleaned = text.strip()
+    if not cleaned.startswith("```"):
+        return cleaned
+
+    lines = cleaned.splitlines()
+    if lines and lines[0].startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
 
 
 def local_answer(question: str, profile: dict) -> str:

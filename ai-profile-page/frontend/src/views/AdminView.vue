@@ -6,6 +6,7 @@
         <span>AI Profile</span>
       </a>
       <div class="nav-actions">
+        <a href="/admin/ai">AI 助手</a>
         <a href="/">返回首页</a>
         <ThemeSwitcher />
       </div>
@@ -131,6 +132,11 @@
 import { computed, onMounted, ref } from "vue";
 import { NAlert, NButton, NInput } from "naive-ui";
 import { FileText, RefreshCw, Save, Settings, Upload } from "lucide-vue-next";
+import {
+  clearStoredAdminPassword,
+  getStoredAdminPassword,
+  setStoredAdminPassword,
+} from "../adminAuth";
 import MarkdownLiteEditor from "../components/MarkdownLiteEditor.vue";
 import {
   adminLogin,
@@ -141,9 +147,7 @@ import {
 } from "../api";
 import ThemeSwitcher from "../components/ThemeSwitcher.vue";
 
-const STORAGE_KEY = "ai-profile-admin-password";
-
-const password = ref(sessionStorage.getItem(STORAGE_KEY) || "");
+const password = ref(getStoredAdminPassword());
 const authenticated = ref(false);
 const loading = ref(false);
 const saving = ref(false);
@@ -157,7 +161,7 @@ const dirty = ref(false);
 const file = ref(null);
 const selectedName = ref("");
 
-const adminPassword = computed(() => sessionStorage.getItem(STORAGE_KEY) || password.value);
+const adminPassword = computed(() => getStoredAdminPassword() || password.value);
 const displayPath = computed(() => {
   if (!documentPath.value) return "content/profile.md";
   return documentPath.value.split(/[\\/]/).slice(-3).join("/");
@@ -182,12 +186,12 @@ async function login() {
   loading.value = true;
   try {
     const result = await adminLogin(password.value);
-    sessionStorage.setItem(STORAGE_KEY, password.value);
+    setStoredAdminPassword(password.value);
     authenticated.value = true;
     setStatus(result.message, "success");
     await loadDocument();
   } catch (error) {
-    sessionStorage.removeItem(STORAGE_KEY);
+    clearStoredAdminPassword();
     authenticated.value = false;
     setStatus(error.message, "error");
   } finally {
@@ -196,7 +200,7 @@ async function login() {
 }
 
 function logout() {
-  sessionStorage.removeItem(STORAGE_KEY);
+  clearStoredAdminPassword();
   password.value = "";
   authenticated.value = false;
   markdown.value = "";

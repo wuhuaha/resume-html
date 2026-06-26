@@ -119,11 +119,15 @@ const props = defineProps({
     type: String,
     default: "",
   },
+  defaultMode: {
+    type: String,
+    default: "split",
+  },
 });
 
 const emit = defineEmits(["update:modelValue"]);
 
-const mode = ref("split");
+const mode = ref(props.defaultMode);
 const textareaRef = ref(null);
 
 const blocks = computed(() => parseMarkdown(props.modelValue));
