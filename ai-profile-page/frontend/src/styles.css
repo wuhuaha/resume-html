@@ -774,6 +774,10 @@ p {
   min-height: 0;
 }
 
+.ai-command-panel {
+  overflow: auto;
+}
+
 .admin-page-head {
   display: flex;
   align-items: flex-end;

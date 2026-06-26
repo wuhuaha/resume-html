@@ -41,7 +41,7 @@ npm run dev -- --host 127.0.0.1 --port 4173
 
 主要内容位于 `content/profile.md`。作者后台 `/admin` 内置轻量 Markdown 编辑器，支持常用格式工具栏、编辑/分屏/预览模式、上传 Word/PDF/Markdown 转草稿、保存后刷新资料索引。
 
-`/admin/ai` 提供 AI 内容助手，拆成两个独立工作流：
+`/admin` 是统一内容工作台，包含手动编辑、AI 辅助和首页编排，拆成两个独立工作流：
 
 - 资料修改：用自然语言指令让 DeepSeek 修改 Markdown 草稿，确认后保存到 `content/profile.md`。
 - 首页编排：用自然语言指令调整首页展示文案、排序和预设问题，确认后保存到 `content/home_briefing.json`，不修改 Markdown 事实资料。
