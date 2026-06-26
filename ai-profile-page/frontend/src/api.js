@@ -4,9 +4,22 @@ async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, options);
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `Request failed: ${response.status}`);
+    let message = text;
+    try {
+      message = JSON.parse(text).detail || text;
+    } catch {
+      message = text;
+    }
+    throw new Error(message || `Request failed: ${response.status}`);
   }
   return response.json();
+}
+
+function adminHeaders(password, extra = {}) {
+  return {
+    ...extra,
+    "X-Admin-Password": password,
+  };
 }
 
 export function getProfile() {
@@ -33,15 +46,41 @@ export function exportResume(payload) {
   });
 }
 
-export function importDocument(file) {
+export function adminLogin(password) {
+  return request("/api/admin/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+}
+
+export function getMarkdownDocument(password) {
+  return request("/api/admin/markdown", {
+    headers: adminHeaders(password),
+  });
+}
+
+export function saveMarkdownDocument(password, markdown) {
+  return request("/api/admin/markdown", {
+    method: "PUT",
+    headers: adminHeaders(password, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ markdown }),
+  });
+}
+
+export function importDocument(password, file) {
   const form = new FormData();
   form.append("file", file);
   return request("/api/admin/import", {
     method: "POST",
+    headers: adminHeaders(password),
     body: form,
   });
 }
 
-export function reindexContent() {
-  return request("/api/admin/reindex", { method: "POST" });
+export function reindexContent(password) {
+  return request("/api/admin/reindex", {
+    method: "POST",
+    headers: adminHeaders(password),
+  });
 }

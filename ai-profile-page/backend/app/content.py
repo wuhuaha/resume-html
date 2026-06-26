@@ -17,6 +17,11 @@ def read_markdown(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def write_markdown(path: Path, markdown_text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(markdown_text, encoding="utf-8", newline="\n")
+
+
 def parse_frontmatter(markdown_text: str) -> tuple[dict[str, str], str]:
     if not markdown_text.startswith("---"):
         return {}, markdown_text
@@ -125,4 +130,3 @@ def bullets_from_markdown(markdown_text: str) -> list[dict[str, str]]:
 def knowledge_context(profile: dict[str, Any], max_chars: int = 12000) -> str:
     text = profile["plainText"]
     return text[:max_chars]
-

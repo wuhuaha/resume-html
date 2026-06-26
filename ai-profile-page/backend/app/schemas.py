@@ -45,6 +45,25 @@ class ExportResponse(BaseModel):
     note: str
 
 
+class AdminLoginRequest(BaseModel):
+    password: str = ""
+
+
+class AdminLoginResponse(BaseModel):
+    ok: bool
+    message: str
+
+
+class MarkdownDocumentResponse(BaseModel):
+    path: str
+    markdown: str
+    sections: int
+
+
+class MarkdownSaveRequest(BaseModel):
+    markdown: str = Field(min_length=1)
+
+
 class ReindexResponse(BaseModel):
     sections: int
     message: str

@@ -22,6 +22,7 @@ DEEPSEEK_API_KEY=sk-...
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 DEEPSEEK_CHAT_MODEL=deepseek-v4-flash
 DEEPSEEK_EXPORT_MODEL=deepseek-v4-pro
+ADMIN_PASSWORD=admin
 ```
 
 未配置 API Key 时，公开页面仍可浏览，AI 问答和导出会使用本地资料给出保守兜底结果。
@@ -38,5 +39,6 @@ npm run dev -- --host 127.0.0.1 --port 4173
 
 ## 内容维护
 
-主要内容位于 `content/profile.md`。作者后台 `/admin` 支持上传 Word/PDF 转 Markdown 草稿，确认后再人工整理到内容源。
+主要内容位于 `content/profile.md`。作者后台 `/admin` 支持直接编辑 Markdown、上传 Word/PDF/Markdown 转草稿、保存后刷新资料索引。
 
+后台修改密码由后端环境变量 `ADMIN_PASSWORD` 控制；不配置时默认是 `admin`。生产部署时应改成强密码，并保证 `backend/.env` 不进入 Git。

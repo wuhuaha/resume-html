@@ -1,16 +1,29 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+import secrets
+
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from .briefing import clear_briefing_cache, generate_briefing
 from .config import settings
-from .content import knowledge_context, load_profile
+from .content import knowledge_context, load_profile, read_markdown, write_markdown
 from .deepseek import deepseek_client
 from .exporter import local_match_resume, markdown_to_resume_html
 from .importer import upload_to_markdown
-from .schemas import BriefingResponse, ChatRequest, ChatResponse, ExportRequest, ExportResponse, ReindexResponse
+from .schemas import (
+    AdminLoginRequest,
+    AdminLoginResponse,
+    BriefingResponse,
+    ChatRequest,
+    ChatResponse,
+    ExportRequest,
+    ExportResponse,
+    MarkdownDocumentResponse,
+    MarkdownSaveRequest,
+    ReindexResponse,
+)
 
 app = FastAPI(title="AI Profile Page API", version="0.1.0")
 
@@ -25,6 +38,11 @@ app.add_middleware(
 
 def profile_data() -> dict:
     return load_profile(settings.resolved_content_path)
+
+
+def verify_admin_password(x_admin_password: str = Header(default="")) -> None:
+    if not secrets.compare_digest(x_admin_password, settings.admin_password):
+        raise HTTPException(status_code=401, detail="管理密码不正确。")
 
 
 @app.get("/api/profile")
@@ -115,8 +133,40 @@ async def export_resume_html(request: ExportRequest) -> str:
     return result.html
 
 
+@app.post("/api/admin/login", response_model=AdminLoginResponse)
+async def admin_login(request: AdminLoginRequest) -> AdminLoginResponse:
+    if not secrets.compare_digest(request.password, settings.admin_password):
+        raise HTTPException(status_code=401, detail="管理密码不正确。")
+    return AdminLoginResponse(ok=True, message="已进入作者后台。")
+
+
+@app.get("/api/admin/markdown", response_model=MarkdownDocumentResponse)
+async def get_markdown(_: None = Depends(verify_admin_password)) -> MarkdownDocumentResponse:
+    path = settings.resolved_content_path
+    profile = profile_data()
+    return MarkdownDocumentResponse(
+        path=str(path),
+        markdown=read_markdown(path),
+        sections=len(profile["sections"]),
+    )
+
+
+@app.put("/api/admin/markdown", response_model=ReindexResponse)
+async def save_markdown(
+    request: MarkdownSaveRequest,
+    _: None = Depends(verify_admin_password),
+) -> ReindexResponse:
+    write_markdown(settings.resolved_content_path, request.markdown)
+    clear_briefing_cache()
+    profile = profile_data()
+    return ReindexResponse(sections=len(profile["sections"]), message="Markdown 已保存，资料索引已刷新。")
+
+
 @app.post("/api/admin/import")
-async def import_document(file: UploadFile = File(...)) -> dict:
+async def import_document(
+    file: UploadFile = File(...),
+    _: None = Depends(verify_admin_password),
+) -> dict:
     try:
         markdown = await upload_to_markdown(file)
     except Exception as exc:  # noqa: BLE001
@@ -125,7 +175,7 @@ async def import_document(file: UploadFile = File(...)) -> dict:
 
 
 @app.post("/api/admin/reindex", response_model=ReindexResponse)
-async def reindex() -> ReindexResponse:
+async def reindex(_: None = Depends(verify_admin_password)) -> ReindexResponse:
     clear_briefing_cache()
     profile = profile_data()
     return ReindexResponse(sections=len(profile["sections"]), message="资料索引已重建。")

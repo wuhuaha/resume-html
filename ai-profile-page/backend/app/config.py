@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com"
     deepseek_chat_model: str = "deepseek-v4-flash"
     deepseek_export_model: str = "deepseek-v4-pro"
+    admin_password: str = "admin"
     content_path: str = "../content/profile.md"
     frontend_origin: str = "http://127.0.0.1:4173"
 
@@ -20,4 +21,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
