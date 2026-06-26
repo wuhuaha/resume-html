@@ -84,6 +84,28 @@ export function previewMarkdownBriefing(password, markdown) {
   });
 }
 
+export function getHomeBriefingDraft(password) {
+  return request("/api/admin/home-briefing", {
+    headers: adminHeaders(password),
+  });
+}
+
+export function aiEditHomeBriefing(password, briefing, instruction) {
+  return request("/api/admin/home-briefing/ai", {
+    method: "POST",
+    headers: adminHeaders(password, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ briefing, instruction }),
+  });
+}
+
+export function saveHomeBriefing(password, briefing) {
+  return request("/api/admin/home-briefing", {
+    method: "PUT",
+    headers: adminHeaders(password, { "Content-Type": "application/json" }),
+    body: JSON.stringify({ briefing }),
+  });
+}
+
 export function importDocument(password, file) {
   const form = new FormData();
   form.append("file", file);

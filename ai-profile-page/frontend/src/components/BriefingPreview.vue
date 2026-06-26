@@ -1,5 +1,5 @@
 <template>
-  <div class="briefing-preview">
+  <div :class="['briefing-preview', `briefing-preview-${variant}`]">
     <section class="brief-preview-hero">
       <p class="eyebrow">{{ page.hero.eyebrow }}</p>
       <h2>{{ page.hero.headline }}</h2>
@@ -51,6 +51,10 @@ const props = defineProps({
   briefing: {
     type: Object,
     default: null,
+  },
+  variant: {
+    type: String,
+    default: "compact",
   },
 });
 

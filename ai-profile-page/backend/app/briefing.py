@@ -4,6 +4,7 @@ import json
 import re
 from copy import deepcopy
 from hashlib import sha256
+from pathlib import Path
 from typing import Any
 
 from .content import knowledge_context
@@ -11,6 +12,29 @@ from .deepseek import deepseek_client
 from .config import settings
 
 _briefing_cache: dict[str, dict[str, Any]] = {}
+
+
+def read_briefing_override(path: Path, profile: dict[str, Any]) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    fallback = local_briefing(profile)
+    merged = merge_briefing(fallback, raw)
+    merged["generated"] = bool(raw.get("generated", True))
+    merged["aiConfigured"] = deepseek_client.configured
+    return merged
+
+
+def write_briefing_override(path: Path, briefing: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(briefing, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+        newline="\n",
+    )
 
 
 def local_briefing(profile: dict[str, Any]) -> dict[str, Any]:
@@ -115,6 +139,10 @@ def local_briefing(profile: dict[str, Any]) -> dict[str, Any]:
 
 
 async def generate_briefing(profile: dict[str, Any]) -> dict[str, Any]:
+    override = read_briefing_override(settings.resolved_home_briefing_path, profile)
+    if override:
+        return deepcopy(override)
+
     cache_key = briefing_cache_key(profile)
     if cache_key in _briefing_cache:
         return deepcopy(_briefing_cache[cache_key])
@@ -191,6 +219,47 @@ async def generate_briefing(profile: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         _briefing_cache[cache_key] = fallback
         return deepcopy(fallback)
+
+
+async def adjust_briefing_with_ai(
+    profile: dict[str, Any],
+    current_briefing: dict[str, Any],
+    instruction: str,
+) -> dict[str, Any]:
+    fallback = local_briefing(profile)
+    if not deepseek_client.configured:
+        return deepcopy(current_briefing)
+
+    prompt = f"""
+你是个人介绍页首页编排助手。请基于当前首页 JSON 和候选人 Markdown 资料，按指令调整首页展示文案与排序。
+
+严格要求：
+- 只能调整首页展示结构和文案，不要修改候选人的事实资料。
+- 不得新增资料中没有的经历、公司、时间、数字或成果。
+- headline 必须保持为候选人姓名。
+- 输出必须是完整 JSON，不要 Markdown，不要解释。
+
+修改指令：
+{instruction}
+
+候选人资料：
+{knowledge_context(profile)}
+
+当前首页 JSON：
+{json.dumps(current_briefing, ensure_ascii=False)}
+"""
+    raw = await deepseek_client.chat(
+        [
+            {"role": "system", "content": "你只输出合法 JSON，且不得编造事实。"},
+            {"role": "user", "content": prompt},
+        ],
+        settings.deepseek_chat_model,
+    )
+    parsed = parse_json_object(raw)
+    merged = merge_briefing(fallback, parsed)
+    merged["generated"] = True
+    merged["aiConfigured"] = True
+    return merged
 
 
 def clear_briefing_cache() -> None:

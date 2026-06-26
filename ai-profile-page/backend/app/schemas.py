@@ -79,6 +79,21 @@ class AdminPreviewRequest(BaseModel):
     markdown: str = Field(min_length=1)
 
 
+class AdminHomeBriefingResponse(BaseModel):
+    briefing: dict
+    saved: bool
+    aiConfigured: bool
+
+
+class AdminHomeBriefingSaveRequest(BaseModel):
+    briefing: dict
+
+
+class AdminHomeBriefingEditRequest(BaseModel):
+    briefing: dict
+    instruction: str = Field(min_length=1)
+
+
 class ReindexResponse(BaseModel):
     sections: int
     message: str

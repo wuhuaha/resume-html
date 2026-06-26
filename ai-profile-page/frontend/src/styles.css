@@ -724,23 +724,51 @@ p {
   gap: 24px;
 }
 
-.ai-admin-layout {
+.ai-two-column {
   display: grid;
-  grid-template-columns: minmax(280px, 320px) minmax(520px, 1fr) minmax(360px, 0.72fr);
-  gap: 20px;
+  grid-template-columns: minmax(280px, 340px) minmax(720px, 1fr);
+  gap: 24px;
   align-items: stretch;
 }
 
 .admin-ai-page .preview-panel,
 .admin-ai-page .workspace-panel {
-  height: calc(100vh - 302px);
+  height: calc(100vh - 360px);
   min-height: 650px;
   max-height: 860px;
 }
 
-.ai-chat-panel,
-.ai-draft-panel,
-.ai-briefing-panel {
+.admin-mode-tabs {
+  display: inline-flex;
+  gap: 6px;
+  margin: 0 0 22px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.admin-mode-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.admin-mode-tabs button.active {
+  background: var(--ink);
+  color: #ffffff;
+}
+
+.ai-command-panel,
+.ai-main-panel {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1093,6 +1121,20 @@ p {
   color: var(--muted);
 }
 
+.briefing-preview-wide {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.75fr);
+  align-content: start;
+}
+
+.briefing-preview-wide .brief-preview-hero,
+.briefing-preview-wide .brief-preview-grid {
+  grid-column: 1 / -1;
+}
+
+.briefing-preview-wide .brief-preview-section {
+  min-width: 0;
+}
+
 .brief-preview-hero,
 .brief-preview-section {
   padding-bottom: 16px;
@@ -1391,7 +1433,7 @@ p {
     grid-template-columns: 1fr;
   }
 
-  .ai-admin-layout {
+  .ai-two-column {
     grid-template-columns: 1fr;
   }
 
@@ -1399,6 +1441,10 @@ p {
   .admin-ai-page .workspace-panel {
     height: auto;
     max-height: none;
+  }
+
+  .briefing-preview-wide {
+    grid-template-columns: 1fr;
   }
 
   .admin-page-head {

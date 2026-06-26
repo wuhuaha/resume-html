@@ -16,7 +16,7 @@
       <div class="workspace-panel login-panel">
         <p class="eyebrow">AI 内容助手</p>
         <h1>输入修改密码</h1>
-        <p class="muted-copy">进入后可通过 DeepSeek 对话修改 Markdown 草稿，并预览首页生成效果。</p>
+        <p class="muted-copy">进入后可分别维护资料 Markdown 和首页展示编排。</p>
 
         <form class="login-form" @submit.prevent="login">
           <n-input
@@ -43,54 +43,55 @@
           <p class="eyebrow">作者后台</p>
           <h1>AI 内容助手</h1>
           <p class="muted-copy">
-            用对话修改 Markdown 草稿，并用同一套首页生成逻辑预览效果。确认后再保存到正式内容源。
+            资料修改负责事实 Markdown；首页编排负责展示文案、排序和预设问题。两者独立保存。
           </p>
         </div>
         <div class="admin-head-actions">
-          <span :class="['save-state', dirty ? 'is-dirty' : '']">{{ dirty ? "草稿未保存" : "已同步" }}</span>
+          <span :class="['save-state', activeDirty ? 'is-dirty' : '']">{{ activeDirty ? "有未保存修改" : "已同步" }}</span>
           <n-button quaternary @click="logout">退出</n-button>
         </div>
       </header>
 
-      <section class="ai-admin-layout">
-        <aside class="workspace-panel ai-chat-panel">
+      <div class="admin-mode-tabs">
+        <button type="button" :class="{ active: mode === 'markdown' }" @click="mode = 'markdown'">
+          <FileText :size="17" />
+          <span>资料修改</span>
+        </button>
+        <button type="button" :class="{ active: mode === 'home' }" @click="mode = 'home'">
+          <LayoutTemplate :size="17" />
+          <span>首页编排</span>
+        </button>
+      </div>
+
+      <section v-if="mode === 'markdown'" class="ai-two-column">
+        <aside class="workspace-panel ai-command-panel">
           <div class="admin-section-heading">
-            <h2>对话修改</h2>
-            <p>AI 只允许基于当前 Markdown 改写、重排和精简，不应新增事实。</p>
+            <h2>修改 Markdown</h2>
+            <p>这里改的是事实资料层，保存后会影响首页、问答和简历导出。</p>
           </div>
 
           <div class="ai-preset-list">
-            <button v-for="item in presets" :key="item" type="button" @click="instruction = item">
+            <button v-for="item in markdownPresets" :key="item" type="button" @click="markdownInstruction = item">
               {{ item }}
             </button>
           </div>
 
           <n-input
-            v-model:value="instruction"
+            v-model:value="markdownInstruction"
             type="textarea"
             class="ai-instruction-input"
-            placeholder="例如：把核心能力改得更适合语音 AI 岗位，保留事实和量化结果。"
+            placeholder="例如：精简项目描述，保留量化结果和关键技术证据。"
           />
 
           <div class="ai-command-row">
-            <n-button type="primary" :loading="aiLoading" :disabled="!instruction.trim()" @click="runAiEdit">
+            <n-button type="primary" :loading="markdownAiLoading" :disabled="!markdownInstruction.trim()" @click="runMarkdownEdit">
               <template #icon><Bot :size="18" /></template>
-              生成草稿
+              生成资料草稿
             </n-button>
-            <n-button :loading="previewLoading" @click="previewDraft">
-              <template #icon><Eye :size="18" /></template>
-              预览首页
-            </n-button>
-            <n-button type="primary" secondary :loading="saving" @click="saveDraft">
+            <n-button type="primary" secondary :loading="markdownSaving" @click="saveMarkdownDraft">
               <template #icon><Save :size="18" /></template>
-              保存
+              保存 Markdown
             </n-button>
-          </div>
-
-          <div class="ai-message-log">
-            <article v-for="message in messages" :key="message.id" :class="['ai-message', message.role]">
-              {{ message.content }}
-            </article>
           </div>
 
           <n-alert v-if="status" class="admin-alert" :type="statusType" :bordered="false">
@@ -98,7 +99,7 @@
           </n-alert>
         </aside>
 
-        <section class="preview-panel ai-draft-panel">
+        <section class="preview-panel ai-main-panel">
           <div class="preview-toolbar">
             <div>
               <p class="eyebrow">Markdown 草稿</p>
@@ -110,22 +111,65 @@
           </div>
           <MarkdownLiteEditor
             v-model="markdown"
-            default-mode="edit"
+            default-mode="split"
             placeholder="当前 Markdown 会显示在这里。"
-            @update:modelValue="dirty = true"
+            @update:modelValue="markdownDirty = true"
           />
         </section>
+      </section>
 
-        <aside class="preview-panel ai-briefing-panel">
+      <section v-else class="ai-two-column home-compose-layout">
+        <aside class="workspace-panel ai-command-panel">
+          <div class="admin-section-heading">
+            <h2>调整首页</h2>
+            <p>这里改的是展示编排层，不会修改 Markdown 事实资料。</p>
+          </div>
+
+          <div class="ai-preset-list">
+            <button v-for="item in homePresets" :key="item" type="button" @click="homeInstruction = item">
+              {{ item }}
+            </button>
+          </div>
+
+          <n-input
+            v-model:value="homeInstruction"
+            type="textarea"
+            class="ai-instruction-input"
+            placeholder="例如：首页更突出语音 AI 和后端系统，语气专业克制。"
+          />
+
+          <div class="ai-command-row">
+            <n-button type="primary" :loading="homeAiLoading" :disabled="!homeInstruction.trim()" @click="runHomeEdit">
+              <template #icon><Bot :size="18" /></template>
+              生成首页草稿
+            </n-button>
+            <n-button :loading="homeLoading" @click="loadHomeBriefing">
+              <template #icon><RefreshCw :size="18" /></template>
+              重新加载
+            </n-button>
+            <n-button type="primary" secondary :loading="homeSaving" @click="saveHomeDraft">
+              <template #icon><Save :size="18" /></template>
+              保存首页
+            </n-button>
+          </div>
+
+          <n-alert v-if="status" class="admin-alert" :type="statusType" :bordered="false">
+            {{ status }}
+          </n-alert>
+        </aside>
+
+        <section class="preview-panel ai-main-panel">
           <div class="preview-toolbar">
             <div>
-              <p class="eyebrow">首页预览</p>
+              <p class="eyebrow">{{ homeSaved ? "已发布首页编排" : "首页编排草稿" }}</p>
               <h2>{{ previewTitle }}</h2>
             </div>
-            <n-button size="small" :loading="previewLoading" @click="previewDraft">刷新预览</n-button>
+            <div class="admin-doc-stats">
+              <span>{{ homeBriefing?.generated ? "LLM 生成" : "本地解析" }}</span>
+            </div>
           </div>
-          <BriefingPreview :briefing="briefing" />
-        </aside>
+          <BriefingPreview :briefing="homeBriefing" variant="wide" />
+        </section>
       </section>
     </template>
   </main>
@@ -134,7 +178,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { NAlert, NButton, NInput } from "naive-ui";
-import { Bot, Eye, Save } from "lucide-vue-next";
+import { Bot, FileText, LayoutTemplate, RefreshCw, Save } from "lucide-vue-next";
 import {
   clearStoredAdminPassword,
   getStoredAdminPassword,
@@ -142,49 +186,59 @@ import {
 } from "../adminAuth";
 import {
   adminLogin,
+  aiEditHomeBriefing,
   aiEditMarkdown,
+  getHomeBriefingDraft,
   getMarkdownDocument,
-  previewMarkdownBriefing,
+  saveHomeBriefing,
   saveMarkdownDocument,
 } from "../api";
 import BriefingPreview from "../components/BriefingPreview.vue";
 import MarkdownLiteEditor from "../components/MarkdownLiteEditor.vue";
 import ThemeSwitcher from "../components/ThemeSwitcher.vue";
 
-const presets = [
-  "把首页首屏表达改得更适合语音 AI 岗位，但不要增加经历。",
+const markdownPresets = [
   "精简项目描述，保留量化结果和关键技术证据。",
   "把核心能力重新组织成招聘方更容易扫描的结构。",
   "检查内容是否有夸大表达，并改得更保守可信。",
 ];
 
+const homePresets = [
+  "首页首屏更突出语音 AI 和后端系统，语气专业克制。",
+  "调整首页内容排序，让招聘方先看到岗位匹配证据。",
+  "优化预设问题，让面试官更容易点击提问。",
+  "把首页文案改得更简洁大方，不要营销腔。",
+];
+
+const mode = ref("markdown");
 const password = ref(getStoredAdminPassword());
 const authenticated = ref(false);
 const loading = ref(false);
-const aiLoading = ref(false);
-const previewLoading = ref(false);
-const saving = ref(false);
-const dirty = ref(false);
 const status = ref("");
 const statusType = ref("info");
+
 const markdown = ref("");
 const documentPath = ref("");
-const instruction = ref("");
-const briefing = ref(null);
-const messages = ref([
-  {
-    id: 1,
-    role: "assistant",
-    content: "先选择一个预设，或直接输入你希望如何修改内容。生成结果会进入草稿，不会自动保存。",
-  },
-]);
+const markdownInstruction = ref("");
+const markdownDirty = ref(false);
+const markdownAiLoading = ref(false);
+const markdownSaving = ref(false);
+
+const homeBriefing = ref(null);
+const homeInstruction = ref("");
+const homeDirty = ref(false);
+const homeSaved = ref(false);
+const homeLoading = ref(false);
+const homeAiLoading = ref(false);
+const homeSaving = ref(false);
 
 const adminPassword = computed(() => getStoredAdminPassword() || password.value);
 const displayPath = computed(() => {
   if (!documentPath.value) return "content/profile.md";
   return documentPath.value.split(/[\\/]/).slice(-3).join("/");
 });
-const previewTitle = computed(() => briefing.value?.hero?.statement || "等待生成预览");
+const previewTitle = computed(() => homeBriefing.value?.hero?.statement || "等待生成首页编排");
+const activeDirty = computed(() => (mode.value === "markdown" ? markdownDirty.value : homeDirty.value));
 
 onMounted(async () => {
   if (password.value) {
@@ -207,8 +261,7 @@ async function login() {
     await adminLogin(password.value);
     setStoredAdminPassword(password.value);
     authenticated.value = true;
-    await loadDocument();
-    await previewDraft();
+    await Promise.all([loadMarkdown(), loadHomeBriefing()]);
     setStatus("AI 内容助手已就绪。", "success");
   } catch (error) {
     clearStoredAdminPassword();
@@ -224,59 +277,91 @@ function logout() {
   password.value = "";
   authenticated.value = false;
   markdown.value = "";
-  briefing.value = null;
+  homeBriefing.value = null;
   setStatus("");
 }
 
-async function loadDocument() {
+async function loadMarkdown() {
   const result = await getMarkdownDocument(adminPassword.value);
   markdown.value = result.markdown;
   documentPath.value = result.path;
-  dirty.value = false;
+  markdownDirty.value = false;
 }
 
-async function runAiEdit() {
-  const content = instruction.value.trim();
+async function runMarkdownEdit() {
+  const content = markdownInstruction.value.trim();
   if (!content) return;
-  aiLoading.value = true;
-  messages.value.push({ id: Date.now(), role: "user", content });
+  markdownAiLoading.value = true;
   try {
     const result = await aiEditMarkdown(adminPassword.value, markdown.value, content);
     markdown.value = result.markdown;
-    dirty.value = true;
-    messages.value.push({ id: Date.now() + 1, role: "assistant", content: result.note });
+    markdownDirty.value = true;
     setStatus(result.note, result.configured ? "success" : "warning");
-    await previewDraft();
   } catch (error) {
-    messages.value.push({ id: Date.now() + 1, role: "assistant", content: `修改失败：${error.message}` });
-    setStatus(`修改失败：${error.message}`, "error");
+    setStatus(`资料修改失败：${error.message}`, "error");
   } finally {
-    aiLoading.value = false;
+    markdownAiLoading.value = false;
   }
 }
 
-async function previewDraft() {
-  if (!markdown.value.trim()) return;
-  previewLoading.value = true;
-  try {
-    briefing.value = await previewMarkdownBriefing(adminPassword.value, markdown.value);
-  } catch (error) {
-    setStatus(`预览失败：${error.message}`, "error");
-  } finally {
-    previewLoading.value = false;
-  }
-}
-
-async function saveDraft() {
-  saving.value = true;
+async function saveMarkdownDraft() {
+  markdownSaving.value = true;
   try {
     const result = await saveMarkdownDocument(adminPassword.value, markdown.value);
-    dirty.value = false;
+    markdownDirty.value = false;
+    await loadHomeBriefing();
     setStatus(result.message, "success");
   } catch (error) {
     setStatus(`保存失败：${error.message}`, "error");
   } finally {
-    saving.value = false;
+    markdownSaving.value = false;
+  }
+}
+
+async function loadHomeBriefing() {
+  homeLoading.value = true;
+  try {
+    const result = await getHomeBriefingDraft(adminPassword.value);
+    homeBriefing.value = result.briefing;
+    homeSaved.value = result.saved;
+    homeDirty.value = false;
+  } catch (error) {
+    setStatus(`首页编排加载失败：${error.message}`, "error");
+  } finally {
+    homeLoading.value = false;
+  }
+}
+
+async function runHomeEdit() {
+  const content = homeInstruction.value.trim();
+  if (!content || !homeBriefing.value) return;
+  homeAiLoading.value = true;
+  try {
+    const result = await aiEditHomeBriefing(adminPassword.value, homeBriefing.value, content);
+    homeBriefing.value = result.briefing;
+    homeSaved.value = result.saved;
+    homeDirty.value = true;
+    setStatus(result.aiConfigured ? "已生成首页编排草稿。" : "后端未配置 DeepSeek API Key。", result.aiConfigured ? "success" : "warning");
+  } catch (error) {
+    setStatus(`首页编排失败：${error.message}`, "error");
+  } finally {
+    homeAiLoading.value = false;
+  }
+}
+
+async function saveHomeDraft() {
+  if (!homeBriefing.value) return;
+  homeSaving.value = true;
+  try {
+    const result = await saveHomeBriefing(adminPassword.value, homeBriefing.value);
+    homeBriefing.value = result.briefing;
+    homeSaved.value = result.saved;
+    homeDirty.value = false;
+    setStatus("首页编排已保存，公开首页将使用该版本。", "success");
+  } catch (error) {
+    setStatus(`首页保存失败：${error.message}`, "error");
+  } finally {
+    homeSaving.value = false;
   }
 }
 </script>

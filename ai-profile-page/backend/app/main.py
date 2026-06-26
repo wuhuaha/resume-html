@@ -6,7 +6,15 @@ from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
-from .briefing import clear_briefing_cache, generate_briefing
+from .briefing import (
+    adjust_briefing_with_ai,
+    clear_briefing_cache,
+    generate_briefing,
+    local_briefing,
+    merge_briefing,
+    read_briefing_override,
+    write_briefing_override,
+)
 from .config import settings
 from .content import knowledge_context, load_profile, parse_profile_markdown, read_markdown, write_markdown
 from .deepseek import deepseek_client
@@ -15,6 +23,9 @@ from .importer import upload_to_markdown
 from .schemas import (
     AdminAiEditRequest,
     AdminAiEditResponse,
+    AdminHomeBriefingEditRequest,
+    AdminHomeBriefingResponse,
+    AdminHomeBriefingSaveRequest,
     AdminLoginRequest,
     AdminLoginResponse,
     AdminPreviewRequest,
@@ -209,6 +220,51 @@ async def preview_briefing(
     return BriefingResponse(**briefing)
 
 
+@app.get("/api/admin/home-briefing", response_model=AdminHomeBriefingResponse)
+async def get_home_briefing(_: None = Depends(verify_admin_password)) -> AdminHomeBriefingResponse:
+    profile = profile_data()
+    saved = read_briefing_override(settings.resolved_home_briefing_path, profile)
+    briefing = saved or await generate_briefing(profile)
+    return AdminHomeBriefingResponse(
+        briefing=briefing,
+        saved=saved is not None,
+        aiConfigured=deepseek_client.configured,
+    )
+
+
+@app.post("/api/admin/home-briefing/ai", response_model=AdminHomeBriefingResponse)
+async def ai_edit_home_briefing(
+    request: AdminHomeBriefingEditRequest,
+    _: None = Depends(verify_admin_password),
+) -> AdminHomeBriefingResponse:
+    profile = profile_data()
+    if not deepseek_client.configured:
+        return AdminHomeBriefingResponse(
+            briefing=request.briefing,
+            saved=False,
+            aiConfigured=False,
+        )
+
+    briefing = await adjust_briefing_with_ai(profile, request.briefing, request.instruction)
+    return AdminHomeBriefingResponse(briefing=briefing, saved=False, aiConfigured=True)
+
+
+@app.put("/api/admin/home-briefing", response_model=AdminHomeBriefingResponse)
+async def save_home_briefing(
+    request: AdminHomeBriefingSaveRequest,
+    _: None = Depends(verify_admin_password),
+) -> AdminHomeBriefingResponse:
+    profile = profile_data()
+    normalized = await normalize_home_briefing(profile, request.briefing)
+    write_briefing_override(settings.resolved_home_briefing_path, normalized)
+    clear_briefing_cache()
+    return AdminHomeBriefingResponse(
+        briefing=normalized,
+        saved=True,
+        aiConfigured=deepseek_client.configured,
+    )
+
+
 @app.post("/api/admin/import")
 async def import_document(
     file: UploadFile = File(...),
@@ -226,6 +282,13 @@ async def reindex(_: None = Depends(verify_admin_password)) -> ReindexResponse:
     clear_briefing_cache()
     profile = profile_data()
     return ReindexResponse(sections=len(profile["sections"]), message="资料索引已重建。")
+
+
+async def normalize_home_briefing(profile: dict, briefing: dict) -> dict:
+    normalized = merge_briefing(local_briefing(profile), briefing)
+    normalized["generated"] = bool(briefing.get("generated", True))
+    normalized["aiConfigured"] = deepseek_client.configured
+    return normalized
 
 
 def strip_markdown_fence(text: str) -> str:
