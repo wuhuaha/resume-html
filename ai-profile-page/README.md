@@ -39,6 +39,6 @@ npm run dev -- --host 127.0.0.1 --port 4173
 
 ## 内容维护
 
-主要内容位于 `content/profile.md`。作者后台 `/admin` 支持直接编辑 Markdown、上传 Word/PDF/Markdown 转草稿、保存后刷新资料索引。
+主要内容位于 `content/profile.md`。作者后台 `/admin` 内置轻量 Markdown 编辑器，支持常用格式工具栏、编辑/分屏/预览模式、上传 Word/PDF/Markdown 转草稿、保存后刷新资料索引。
 
 后台修改密码由后端环境变量 `ADMIN_PASSWORD` 控制；不配置时默认是 `admin`。生产部署时应改成强密码，并保证 `backend/.env` 不进入 Git。

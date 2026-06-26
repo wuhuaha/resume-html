@@ -825,6 +825,227 @@ p {
   display: none;
 }
 
+.md-lite-editor {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 640px;
+  margin-top: 16px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.md-lite-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(248, 250, 249, 0.9);
+}
+
+.md-lite-tools,
+.md-lite-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.md-lite-tools button,
+.md-lite-modes button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.md-lite-tools button:hover,
+.md-lite-modes button:hover {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.md-lite-modes {
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.md-lite-modes button {
+  height: 28px;
+  min-width: 0;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.md-lite-modes button.active {
+  background: var(--ink);
+  color: #ffffff;
+}
+
+.md-lite-body {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+}
+
+.md-lite-body.mode-split {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.md-lite-body.mode-edit,
+.md-lite-body.mode-preview {
+  grid-template-columns: 1fr;
+}
+
+.md-lite-textarea {
+  width: 100%;
+  min-height: 596px;
+  padding: 18px;
+  resize: none;
+  border: 0;
+  outline: 0;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+  font-family: Consolas, "Microsoft YaHei", monospace;
+  font-size: 0.94rem;
+  line-height: 1.7;
+}
+
+.md-lite-preview {
+  min-height: 596px;
+  padding: 20px 22px 28px;
+  overflow: auto;
+  border-left: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.46);
+  color: #222927;
+}
+
+.md-lite-body.mode-preview .md-lite-preview {
+  border-left: 0;
+}
+
+.md-lite-preview h1,
+.md-lite-preview h2,
+.md-lite-preview h3 {
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.md-lite-preview h1 {
+  margin: 0 0 18px;
+  font-size: 2rem;
+}
+
+.md-lite-preview h2 {
+  margin: 26px 0 12px;
+  font-size: 1.42rem;
+}
+
+.md-lite-preview h3 {
+  margin: 20px 0 8px;
+  font-size: 1.05rem;
+}
+
+.md-lite-preview p,
+.md-lite-preview li {
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.md-lite-preview p {
+  margin: 0 0 12px;
+}
+
+.md-lite-preview ul,
+.md-lite-preview ol {
+  margin: 0 0 14px;
+  padding-left: 20px;
+}
+
+.md-lite-preview blockquote {
+  margin: 14px 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.md-lite-preview blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+.md-lite-preview pre {
+  overflow: auto;
+  margin: 14px 0;
+  padding: 14px;
+  border-radius: 8px;
+  background: #141716;
+  color: #eef4f1;
+  font-size: 0.86rem;
+}
+
+.md-lite-preview code {
+  padding: 0.12em 0.34em;
+  border-radius: 5px;
+  background: rgba(20, 23, 22, 0.08);
+  color: var(--ink);
+  font-family: Consolas, "Microsoft YaHei", monospace;
+}
+
+.md-lite-preview pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.md-lite-preview table {
+  width: 100%;
+  margin: 14px 0;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.md-lite-preview th,
+.md-lite-preview td {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.md-lite-preview th {
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+
+.md-lite-preview a {
+  color: var(--accent);
+  font-weight: 800;
+}
+
+.md-lite-preview hr {
+  height: 1px;
+  margin: 20px 0;
+  border: 0;
+  background: var(--line);
+}
+
+.md-lite-empty {
+  color: var(--subtle);
+}
+
 .markdown-draft {
   height: 640px;
   margin-top: 16px;
@@ -917,6 +1138,25 @@ p {
   .assistant-quick,
   .template-list {
     grid-template-columns: 1fr;
+  }
+
+  .md-lite-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .md-lite-tools,
+  .md-lite-modes {
+    width: 100%;
+  }
+
+  .md-lite-body.mode-split {
+    grid-template-columns: 1fr;
+  }
+
+  .md-lite-preview {
+    border-top: 1px solid var(--line);
+    border-left: 0;
   }
 
   .chat-message {

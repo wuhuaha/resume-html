@@ -101,12 +101,10 @@
           </div>
           <span :class="['save-state', dirty ? 'is-dirty' : '']">{{ dirty ? "有未保存修改" : "已同步" }}</span>
         </div>
-        <n-input
-          v-model:value="markdown"
-          class="markdown-draft"
-          type="textarea"
+        <MarkdownLiteEditor
+          v-model="markdown"
           placeholder="这里会显示 content/profile.md 的内容。"
-          @update:value="dirty = true"
+          @update:modelValue="dirty = true"
         />
       </aside>
     </section>
@@ -117,6 +115,7 @@
 import { computed, onMounted, ref } from "vue";
 import { NAlert, NButton, NInput } from "naive-ui";
 import { FileText, RefreshCw, Save, Settings, Upload } from "lucide-vue-next";
+import MarkdownLiteEditor from "../components/MarkdownLiteEditor.vue";
 import {
   adminLogin,
   getMarkdownDocument,
