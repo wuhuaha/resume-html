@@ -101,9 +101,10 @@ p {
 }
 
 .top-nav {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
+  gap: 32px;
   min-height: 56px;
   margin-bottom: 44px;
   padding: 0;
@@ -130,11 +131,29 @@ p {
 }
 
 .nav-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 22px;
+  gap: 24px;
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.nav-links,
+.nav-tools {
+  display: inline-flex;
+  align-items: center;
+}
+
+.nav-links {
+  justify-content: flex-end;
+  gap: 24px;
+  min-width: 0;
+}
+
+.nav-tools {
+  justify-content: flex-end;
+  gap: 14px;
 }
 
 .nav-actions a:hover {
@@ -2072,7 +2091,6 @@ p {
   }
 
   .top-nav,
-  .nav-actions,
   .workbench-topline,
   .assistant-heading,
   .admin-head-actions,
@@ -2085,10 +2103,23 @@ p {
     flex-direction: column;
   }
 
+  .top-nav {
+    display: flex;
+    gap: 14px;
+  }
+
   .nav-actions {
-    gap: 10px 16px;
-    flex-direction: row;
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .nav-links,
+  .nav-tools {
+    justify-content: flex-start;
     flex-wrap: wrap;
+    gap: 10px 16px;
   }
 
   .theme-switcher {

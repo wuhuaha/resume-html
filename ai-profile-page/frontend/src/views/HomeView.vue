@@ -6,22 +6,26 @@
         <span>AI Profile</span>
       </a>
       <div class="nav-actions">
-        <a href="#capabilities">{{ page.nav.capabilities }}</a>
-        <a href="#timeline">{{ page.nav.timeline }}</a>
-        <a href="#projects">{{ page.nav.projects }}</a>
-        <a href="/resume/export">{{ page.nav.export }}</a>
-        <a
-          class="open-source-link"
-          href="https://github.com/wuhuaha/resume-html/blob/main/ai-profile-page/docs/DEPLOYMENT.md"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="查看 GitHub 开源项目部署说明"
-        >
-          <Github :size="16" />
-          <span>开源部署</span>
-        </a>
-        <a class="ghost-link" href="/admin">{{ page.nav.admin }}</a>
-        <ThemeSwitcher />
+        <div class="nav-links">
+          <a href="#capabilities">{{ page.nav.capabilities }}</a>
+          <a href="#timeline">{{ page.nav.timeline }}</a>
+          <a href="#projects">{{ page.nav.projects }}</a>
+          <a href="/resume/export">{{ page.nav.export }}</a>
+        </div>
+        <div class="nav-tools">
+          <a class="ghost-link" href="/admin">{{ page.nav.admin }}</a>
+          <a
+            class="open-source-link"
+            href="https://github.com/wuhuaha/resume-html/blob/main/ai-profile-page/docs/DEPLOYMENT.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="查看 GitHub 开源项目部署说明"
+          >
+            <Github :size="16" />
+            <span>开源部署</span>
+          </a>
+          <ThemeSwitcher />
+        </div>
       </div>
     </nav>
 

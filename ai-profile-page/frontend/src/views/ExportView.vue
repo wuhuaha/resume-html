@@ -6,18 +6,22 @@
         <span>AI Profile</span>
       </a>
       <div class="nav-actions">
-        <a href="/">返回首页</a>
-        <a
-          class="open-source-link"
-          href="https://github.com/wuhuaha/resume-html/blob/main/ai-profile-page/docs/DEPLOYMENT.md"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="查看 GitHub 开源项目部署说明"
-        >
-          <Github :size="16" />
-          <span>开源部署</span>
-        </a>
-        <ThemeSwitcher />
+        <div class="nav-links">
+          <a href="/">返回首页</a>
+        </div>
+        <div class="nav-tools">
+          <a
+            class="open-source-link"
+            href="https://github.com/wuhuaha/resume-html/blob/main/ai-profile-page/docs/DEPLOYMENT.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="查看 GitHub 开源项目部署说明"
+          >
+            <Github :size="16" />
+            <span>开源部署</span>
+          </a>
+          <ThemeSwitcher />
+        </div>
       </div>
     </nav>
 
