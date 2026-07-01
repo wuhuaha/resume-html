@@ -25,6 +25,8 @@ Copy-Item .env.example .env
 | `HOME_BRIEFING_PATH` | `../content/home_briefing.json` | 首页编排配置。 |
 | `SITE_STYLE_PATH` | `../content/site_style.json` | 视觉风格配置。 |
 | `RESUME_EXPORT_CONFIG_PATH` | `../content/resume_export_config.json` | 简历导出策略。 |
+| `RESUME_AVATAR_PATH` | `../storage/resume_avatar` | 简历导出头像资产路径。 |
+| `PROJECT_GITHUB_URL` | `https://github.com/wuhuaha/resume-html` | 导出简历页脚展示的开源项目地址。 |
 | `STATIC_DIR` | 空 | 前端静态文件目录。 |
 | `FRONTEND_ORIGIN` | `http://127.0.0.1:4173` | CORS 允许的前端地址。 |
 | `VOICE_CLONE_REFERENCE_PATH` | `../storage/voice_clone_reference` | 参考音色保存路径。 |
@@ -45,7 +47,19 @@ Copy-Item .env.example .env
 
 ### `content/resume_export_config.json`
 
-简历导出策略配置。可控制目标页数、核心能力条数、经历 bullet 数、项目数量、字号、行高、页边距等。
+简历导出策略配置。可控制：
+
+- `activeMode`：默认篇幅策略，例如 ATS 一页纸、两页精简、完整匹配版。
+- `activeTemplate`：默认样式模板。
+- `modes`：目标页数、核心能力条数、经历 bullet 数、项目数量、字号、行高、页边距、是否保留出生日期、是否允许头像等。
+- `templates`：模板名称、参考来源、布局、主色、字体、是否支持头像、是否显示开源页脚、LLM 生成策略。
+- `branding`：导出简历底部开源项目说明，包括 GitHub 地址和作者。
+
+当前内置模板参考了 JSON Resume 的主题生态、Reactive Resume 的布局/颜色/字体可配置理念、OpenResume 的 ATS 可读性，以及 RenderCV 的内容与版式分离思路。
+
+### 简历头像
+
+管理员可在后台上传 JPG、PNG 或 WebP 头像。头像保存到 `RESUME_AVATAR_PATH` 指向的 `storage/` 路径，不进入 Git。导出 HTML 时如果篇幅模式允许头像且当前模板支持头像，后端会把图片转成 data URL 内嵌到 HTML，便于离线打开。
 
 ## 前端环境变量
 
