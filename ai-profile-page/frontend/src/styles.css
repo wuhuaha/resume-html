@@ -141,38 +141,27 @@ p {
   color: var(--ink);
 }
 
-.deploy-link,
-.github-source-link {
+.open-source-link {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
-  white-space: nowrap;
-}
-
-.deploy-link {
-  padding: 0 12px;
-  border: 1px solid color-mix(in srgb, var(--accent) 46%, var(--line));
-  background: var(--accent);
-  color: #ffffff;
-  font-weight: 850;
-}
-
-.nav-actions .deploy-link:hover {
-  color: #ffffff;
-  background: color-mix(in srgb, var(--accent) 86%, var(--ink));
-}
-
-.github-source-link {
   gap: 6px;
+  min-height: 34px;
   padding: 0 10px;
   border: 1px solid var(--line);
   background: color-mix(in srgb, var(--surface) 76%, transparent);
   color: var(--ink);
-  font-weight: 780;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
-.github-source-link svg {
+.open-source-link:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--line));
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.open-source-link svg {
   flex: 0 0 auto;
 }
 
