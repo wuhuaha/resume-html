@@ -31,12 +31,32 @@
             />
           </n-form-item>
 
-          <n-form-item label="导出模板">
-            <n-radio-group v-model:value="template" class="template-list">
-              <n-radio-button v-for="item in templates" :key="item.value" :value="item.value">
+          <n-form-item label="样式模板">
+            <div class="export-option-grid">
+              <button
+                v-for="item in templates"
+                :key="item.key"
+                type="button"
+                :class="{ active: template === item.key }"
+                @click="template = item.key"
+              >
                 {{ item.label }}
-              </n-radio-button>
-            </n-radio-group>
+              </button>
+            </div>
+          </n-form-item>
+
+          <n-form-item label="篇幅模式">
+            <div class="export-option-grid">
+              <button
+                v-for="item in modeOptions"
+                :key="item.value"
+                type="button"
+                :class="{ active: mode === item.value }"
+                @click="mode = item.value"
+              >
+                {{ item.label }}
+              </button>
+            </div>
           </n-form-item>
 
           <n-button type="primary" size="large" block :loading="loading" @click="generate">
@@ -44,6 +64,11 @@
             生成简历
           </n-button>
         </n-form>
+        <div v-if="activeModeConfig" class="export-policy-summary">
+          <strong>{{ activeModeConfig.label }}</strong>
+          <span>{{ activeModeConfig.targetPages ? `${activeModeConfig.targetPages} 页目标` : "不限页数" }}</span>
+          <p>{{ activeModeConfig.description }}</p>
+        </div>
         <p class="helper-text">{{ note }}</p>
       </div>
 
@@ -63,24 +88,49 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
-import { NButton, NForm, NFormItem, NInput, NRadioButton, NRadioGroup } from "naive-ui";
-import { exportResume } from "../api";
+import { computed, onMounted, ref } from "vue";
+import { NButton, NForm, NFormItem, NInput } from "naive-ui";
+import { exportResume, getResumeExportConfig } from "../api";
 import ThemeSwitcher from "../components/ThemeSwitcher.vue";
 
 const jd = ref("");
 const direction = ref("语音 AI / 后端系统");
 const template = ref("ats");
+const mode = ref("one-page");
+const exportConfig = ref(null);
 const resultHtml = ref("");
 const filename = ref("wangtao-resume.html");
 const note = ref("后端未配置 DeepSeek Key 时，会使用本地资料生成保守版本。");
 const loading = ref(false);
 
-const templates = [
-  { value: "ats", label: "ATS 一页纸" },
-  { value: "voice-ai", label: "AI / 语音方向" },
-  { value: "backend", label: "后端 / 系统方向" },
-];
+const templates = computed(() => {
+  const configured = exportConfig.value?.templates || {};
+  return Object.entries(configured).map(([key, item]) => ({
+    key,
+    label: item.label,
+    description: item.description,
+  }));
+});
+
+const modeOptions = computed(() => {
+  const modes = exportConfig.value?.modes || {};
+  return Object.entries(modes).map(([value, item]) => ({
+    value,
+    label: item.label,
+  }));
+});
+
+const activeModeConfig = computed(() => exportConfig.value?.modes?.[mode.value] || null);
+
+onMounted(async () => {
+  try {
+    exportConfig.value = await getResumeExportConfig();
+    mode.value = exportConfig.value.activeMode || "one-page";
+    template.value = exportConfig.value.activeTemplate || templates.value[0]?.key || "ats-classic";
+  } catch (error) {
+    note.value = `导出策略读取失败，使用默认一页纸策略：${error.message}`;
+  }
+});
 
 async function generate() {
   loading.value = true;
@@ -89,6 +139,7 @@ async function generate() {
       jd: jd.value,
       direction: direction.value,
       template: template.value,
+      mode: mode.value,
     });
     resultHtml.value = result.html;
     filename.value = result.filename;

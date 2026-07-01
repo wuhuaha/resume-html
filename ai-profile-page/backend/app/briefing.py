@@ -53,10 +53,10 @@ def local_briefing(profile: dict[str, Any]) -> dict[str, Any]:
                 "admin": "作者后台",
             },
             "assistant": {
-                "eyebrow": "AI Q&A",
-                "title": "问简历，不问套路",
-                "context": "页面由后端读取 Markdown 资料后生成；问答会约束在简历、项目详情和代码仓摘要内。",
-                "placeholder": "问一句：他为什么适合语音 AI / 后端系统岗位？",
+                "eyebrow": "AI 助手",
+                "title": f"向{meta.get('name', '王涛')}提问",
+                "context": "我是授权 AI 助手，可代替本人向招聘方简短回答经历、项目和岗位匹配问题。",
+                "placeholder": "问：语音 Agent 难点？",
                 "voiceHint": "语音输入为辅助入口；浏览器不支持时可直接使用文字。",
             },
             "sections": {
@@ -160,6 +160,9 @@ async def generate_briefing(profile: dict[str, Any]) -> dict[str, Any]:
 - 只能基于资料事实，不要虚构经历、公司、数字或能力。
 - 内容要专业、克制、简洁，避免营销腔。
 - 页面文案直接使用姓名，不要使用“候选人”这类泛称。
+- assistant 是代替候选人回答访客的授权 AI 助手，访客通常是招聘方或面试官；对话说明不要写成面向候选人本人。
+- assistant 的 context 要说明“可简短回答经历、项目、岗位匹配”，不要承诺无依据内容。
+- suggestedQuestions 要适合招聘方连续追问，短问题为主。
 - 输出必须是 JSON，不要 Markdown，不要解释。
 - JSON schema:
 {{
@@ -237,6 +240,8 @@ async def adjust_briefing_with_ai(
 - 只能调整首页展示结构和文案，不要修改候选人的事实资料。
 - 不得新增资料中没有的经历、公司、时间、数字或成果。
 - headline 必须保持为候选人姓名。
+- assistant 是代替候选人回答访客的授权 AI 助手，访客通常是招聘方或面试官。
+- assistant 文案要支持多轮短问短答，不要写成面向候选人本人。
 - 输出必须是完整 JSON，不要 Markdown，不要解释。
 
 修改指令：
@@ -259,6 +264,7 @@ async def adjust_briefing_with_ai(
     merged = merge_briefing(fallback, parsed)
     merged["generated"] = True
     merged["aiConfigured"] = True
+    polish_generated_copy(merged, fallback)
     return merged
 
 
@@ -408,7 +414,13 @@ def polish_generated_copy(result: dict[str, Any], fallback: dict[str, Any]) -> N
     assistant = result.get("page", {}).get("assistant", {})
     title = assistant.get("title", "")
     if "任何问题" in title or "咨询" in title or len(title) > 18:
-        assistant["title"] = f"问{name}的经历"
+        assistant["title"] = f"向{name}提问"
+    context = assistant.get("context", "")
+    if not context or "AI助手" in context or "AI 助手" in context or "提问" in context or len(context) > 80:
+        assistant["context"] = "我是授权 AI 助手，可代替本人向招聘方简短回答经历、项目和岗位匹配问题。"
+    placeholder = assistant.get("placeholder", "")
+    if not placeholder or "您的" in placeholder or len(placeholder) > 32:
+        assistant["placeholder"] = "问：语音 Agent 难点？"
     normalized_questions = [
         normalize_question(question)
         for question in result.get("suggestedQuestions", fallback["suggestedQuestions"])

@@ -1,0 +1,138 @@
+{
+  "activeMode": "one-page",
+  "activeTemplate": "ats-classic",
+  "modes": {
+    "one-page": {
+      "label": "ATS 一页纸",
+      "description": "投递筛选优先，强制控制内容预算。",
+      "targetPages": 1,
+      "summaryLines": 2,
+      "skillCount": 5,
+      "experienceCount": 3,
+      "experienceBullets": 3,
+      "projectCount": 2,
+      "projectBullets": 2,
+      "includeAwards": false,
+      "includeCertificates": false,
+      "includeBirth": true,
+      "includeAvatar": false,
+      "fontSize": 12.4,
+      "lineHeight": 1.34,
+      "pageMarginMm": 10,
+      "sectionSpacing": 9
+    },
+    "two-page": {
+      "label": "ATS 精简两页",
+      "description": "保留更多项目细节，适合有明确岗位 JD 的投递。",
+      "targetPages": 2,
+      "summaryLines": 3,
+      "skillCount": 6,
+      "experienceCount": 3,
+      "experienceBullets": 5,
+      "projectCount": 3,
+      "projectBullets": 4,
+      "includeAwards": true,
+      "includeCertificates": false,
+      "includeBirth": true,
+      "includeAvatar": false,
+      "fontSize": 13,
+      "lineHeight": 1.42,
+      "pageMarginMm": 12,
+      "sectionSpacing": 12
+    },
+    "complete": {
+      "label": "完整匹配版",
+      "description": "面试前阅读优先，不强制页数。",
+      "targetPages": 0,
+      "summaryLines": 4,
+      "skillCount": 8,
+      "experienceCount": 6,
+      "experienceBullets": 8,
+      "projectCount": 5,
+      "projectBullets": 6,
+      "includeAwards": true,
+      "includeCertificates": true,
+      "includeBirth": true,
+      "includeAvatar": true,
+      "fontSize": 14,
+      "lineHeight": 1.52,
+      "pageMarginMm": 14,
+      "sectionSpacing": 18
+    }
+  },
+  "templates": {
+    "ats-classic": {
+      "label": "ATS 经典单栏",
+      "description": "参考 OpenResume/JSON Resume 的 ATS 优先思路，结构朴素、解析稳定，适合投递系统。",
+      "inspiration": "OpenResume / JSON Resume",
+      "layout": "single",
+      "accent": "#174ea6",
+      "fontFamily": "Microsoft YaHei, Arial, sans-serif",
+      "headerStyle": "plain",
+      "showAvatar": false,
+      "footerEnabled": true,
+      "llmInstruction": "输出 ATS 友好的单栏 Markdown，少用装饰性表达，联系方式和基础信息必须完整。"
+    },
+    "modern-sidebar": {
+      "label": "现代侧栏版",
+      "description": "参考 Reactive Resume 的分区配置思路，头像与基础信息放入侧栏，主体突出经历和项目。",
+      "inspiration": "Reactive Resume",
+      "layout": "sidebar",
+      "accent": "#0f766e",
+      "fontFamily": "Inter, Microsoft YaHei, Arial, sans-serif",
+      "headerStyle": "profile",
+      "showAvatar": true,
+      "footerEnabled": true,
+      "llmInstruction": "输出适合双栏视觉模板的 Markdown，摘要短、经历证据强，避免过长段落。"
+    },
+    "timeline-evidence": {
+      "label": "经历证据时间线",
+      "description": "突出时间线、职责边界和量化结果，适合面试前阅读。",
+      "inspiration": "RenderCV",
+      "layout": "timeline",
+      "accent": "#7c3aed",
+      "fontFamily": "Microsoft YaHei, Arial, sans-serif",
+      "headerStyle": "compact",
+      "showAvatar": false,
+      "footerEnabled": true,
+      "llmInstruction": "按时间线组织经历，每段保留角色、技术栈、量化结果和可验证证据。"
+    },
+    "technical-brief": {
+      "label": "技术档案版",
+      "description": "更像技术能力 brief，适合 AI/后端/架构岗位沟通。",
+      "inspiration": "JSON Resume themes",
+      "layout": "brief",
+      "accent": "#334155",
+      "fontFamily": "Inter, Microsoft YaHei, Arial, sans-serif",
+      "headerStyle": "band",
+      "showAvatar": false,
+      "footerEnabled": true,
+      "llmInstruction": "优先提炼技术栈、系统职责、性能优化和工程交付，不写泛泛软技能。"
+    },
+    "compact-executive": {
+      "label": "紧凑高管摘要",
+      "description": "高密度摘要版，适合快速转发或一页纸初筛。",
+      "inspiration": "RenderCV compact layout",
+      "layout": "compact",
+      "accent": "#111827",
+      "fontFamily": "Arial, Microsoft YaHei, sans-serif",
+      "headerStyle": "plain",
+      "showAvatar": false,
+      "footerEnabled": true,
+      "llmInstruction": "极度精简，所有 bullet 优先使用动词开头和结果导向表达，避免重复。"
+    }
+  },
+  "sectionOrder": [
+    "summary",
+    "skills",
+    "experience",
+    "projects",
+    "awards"
+  ],
+  "branding": {
+    "enabled": true,
+    "githubUrl": "https://github.com/wuhuaha/ai-profile-page",
+    "author": "王涛",
+    "text": "本简历由开源项目 AI Profile Page 生成"
+  }
+}

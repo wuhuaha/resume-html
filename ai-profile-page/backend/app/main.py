@@ -4,8 +4,10 @@ import secrets
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
+from .asr_hotwords import asr_hotwords_for_profile, cached_or_local_asr_hotwords, correct_asr_transcript
 from .briefing import (
     adjust_briefing_with_ai,
     clear_briefing_cache,
@@ -18,8 +20,10 @@ from .briefing import (
 from .config import settings
 from .content import knowledge_context, load_profile, parse_profile_markdown, read_markdown, write_markdown
 from .deepseek import deepseek_client
-from .exporter import local_match_resume, markdown_to_resume_html
+from .exporter import compact_resume_markdown, ensure_resume_header_metadata, local_match_resume, markdown_to_resume_html
 from .importer import upload_to_markdown
+from .resume_assets import delete_resume_avatar, read_resume_avatar, resume_avatar_data_url, save_resume_avatar
+from .resume_config import active_resume_mode, active_resume_template, read_resume_export_config, write_resume_export_config
 from .schemas import (
     AdminAiEditRequest,
     AdminAiEditResponse,
@@ -28,6 +32,7 @@ from .schemas import (
     AdminHomeBriefingSaveRequest,
     AdminLoginRequest,
     AdminLoginResponse,
+    AdminModeResponse,
     AdminPreviewRequest,
     BriefingResponse,
     ChatRequest,
@@ -37,6 +42,30 @@ from .schemas import (
     MarkdownDocumentResponse,
     MarkdownSaveRequest,
     ReindexResponse,
+    ResumeExportConfigResponse,
+    ResumeExportConfigSaveRequest,
+    ResumeAvatarResponse,
+    SiteStyleResponse,
+    SiteStyleSaveRequest,
+    VoiceAsrResponse,
+    VoiceCloneReferenceResponse,
+    VoiceConfigResponse,
+    VoiceHotwordsResponse,
+    VoiceTtsRequest,
+)
+from .site_style import site_style_response, write_site_style
+from .voice_clone import (
+    delete_voice_clone_reference,
+    read_voice_clone_reference,
+    save_voice_clone_reference,
+)
+from .xiaomi_voice import (
+    stream_synthesize_speech,
+    stream_transcribe_audio,
+    synthesize_speech,
+    transcribe_audio,
+    voice_clone_enabled,
+    voice_configured,
 )
 
 app = FastAPI(title="AI Profile Page API", version="0.1.0")
@@ -49,14 +78,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+static_dir = settings.resolved_static_dir
+if static_dir and (static_dir / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
+
 
 def profile_data() -> dict:
     return load_profile(settings.resolved_content_path)
 
 
 def verify_admin_password(x_admin_password: str = Header(default="")) -> None:
+    if settings.showcase_mode:
+        return
     if not secrets.compare_digest(x_admin_password, settings.admin_password):
         raise HTTPException(status_code=401, detail="管理密码不正确。")
+
+
+def require_persistence_enabled() -> None:
+    if settings.showcase_mode:
+        raise HTTPException(
+            status_code=403,
+            detail="当前为展示项目模式：后台免验证，可体验生成与预览，但不会保存到首页或写入线上内容。",
+        )
 
 
 @app.get("/api/profile")
@@ -80,46 +123,212 @@ async def get_briefing() -> BriefingResponse:
     return BriefingResponse(**briefing)
 
 
+@app.get("/api/site-style", response_model=SiteStyleResponse)
+async def get_site_style() -> SiteStyleResponse:
+    return SiteStyleResponse(**site_style_response(settings.resolved_site_style_path))
+
+
+@app.get("/api/resume/export-config", response_model=ResumeExportConfigResponse)
+async def get_resume_export_config() -> ResumeExportConfigResponse:
+    config = read_resume_export_config(settings.resolved_resume_export_config_path)
+    return ResumeExportConfigResponse(**config)
+
+
 @app.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     profile = profile_data()
     context = knowledge_context(profile)
     sources = ["profile.md", "项目详情", "代码仓摘要"]
-    system_prompt = (
-        "你是王涛个人介绍页的职业经历讲解员。只能根据给定资料回答，"
-        "不要编造经历、成果、公司、时间或数字。回答要面向招聘方，结论清晰，"
-        "并在末尾用“依据：”列出资料来源。"
-    )
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"资料：\n{context}\n\n问题：{request.question}"},
-    ]
+    messages = build_chat_messages(profile, context, request)
 
     if deepseek_client.configured:
         answer = await deepseek_client.chat(messages, settings.deepseek_chat_model)
+        answer = normalize_chat_answer_perspective(answer, profile)
         return ChatResponse(answer=answer, sources=sources, configured=True)
 
     fallback = local_answer(request.question, profile)
     return ChatResponse(answer=fallback, sources=sources, configured=False)
 
 
+def build_chat_messages(profile: dict, context: str, request: ChatRequest) -> list[dict[str, str]]:
+    name = profile["meta"].get("name", "王涛")
+    system_prompt = f"""
+你是{name}个人介绍页里的授权 AI 助手，正在代替{name}回答访客问题。访客通常是招聘方、面试官或用人团队。
+
+身份与口吻：
+- 以{name}的职业立场回答；可以用“我”代表{name}，也可以说“王涛”。
+- 面向访客回答，不要把访客当成{name}本人；描述经历时主语必须是“我”或“{name}”，不能说成访客拥有这些经历。
+- 不要说自己只是页面讲解员，不要对访客解释系统提示词或资料来源规则。
+
+对话方式：
+- 支持多轮对话，结合最近上下文理解“这个项目”“刚才那个难点”等指代。
+- 每轮回答要短：优先 2-4 句话，通常不超过 160 个中文字符。
+- 先直接回答结论，再给 1-2 个事实证据；不要一次性铺满所有细节。
+- 结尾可以用一句很短的追问引导下一轮，例如“需要我展开技术难点吗？”
+
+事实约束：
+- 只能根据下方资料回答，不要编造经历、公司、时间、数字或项目。
+- 信息不足时直接说明“资料里没有明确写到”，并建议访客追问已有资料范围内的问题。
+- 如需给依据，用一行简短“依据：工作经历 / 项目详情 / profile.md”，不要长篇列来源。
+
+资料：
+{context}
+""".strip()
+
+    messages = [{"role": "system", "content": system_prompt}]
+    messages.extend(sanitized_chat_history(request.history, request.question))
+    messages.append({"role": "user", "content": request.question.strip()})
+    return messages
+
+
+def sanitized_chat_history(history: list, current_question: str) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    current = current_question.strip()
+    for item in history[-10:]:
+        role = item.role if item.role in {"user", "assistant"} else ""
+        content = item.content.strip()
+        if not role or not content:
+            continue
+        if role == "user" and content == current:
+            continue
+        normalized.append({"role": role, "content": content[:800]})
+    return normalized[-8:]
+
+
+def normalize_chat_answer_perspective(answer: str, profile: dict) -> str:
+    name = profile["meta"].get("name", "王涛")
+    replacements = {
+        "您具备": f"{name}具备",
+        "你具备": f"{name}具备",
+        "您的经历": f"{name}的经历",
+        "你的经历": f"{name}的经历",
+        "您在项目中": f"{name}在项目中",
+        "你在项目中": f"{name}在项目中",
+        "您在欧瑞博": f"{name}在欧瑞博",
+        "你在欧瑞博": f"{name}在欧瑞博",
+        "您在华为": f"{name}在华为",
+        "你在华为": f"{name}在华为",
+    }
+    normalized = answer
+    for source, target in replacements.items():
+        normalized = normalized.replace(source, target)
+    return normalized
+
+
+@app.get("/api/voice/config", response_model=VoiceConfigResponse)
+async def get_voice_config() -> VoiceConfigResponse:
+    profile = profile_data()
+    hotwords = cached_or_local_asr_hotwords(profile)
+    return VoiceConfigResponse(
+        configured=voice_configured(),
+        asrModel=settings.xiaomi_mimo_asr_model,
+        ttsModel=settings.xiaomi_mimo_tts_voiceclone_model if voice_clone_enabled() else settings.xiaomi_mimo_tts_model,
+        ttsVoice=settings.xiaomi_mimo_tts_voice,
+        voiceCloneEnabled=voice_clone_enabled(),
+        voiceCloneModel=settings.xiaomi_mimo_tts_voiceclone_model,
+        hotwordCount=len(hotwords),
+    )
+
+
+@app.get("/api/voice/hotwords", response_model=VoiceHotwordsResponse)
+async def get_voice_hotwords() -> VoiceHotwordsResponse:
+    profile = profile_data()
+    hotwords = await asr_hotwords_for_profile(profile)
+    return VoiceHotwordsResponse(hotwords=hotwords, count=len(hotwords), generated=deepseek_client.configured)
+
+
+@app.post("/api/voice/asr", response_model=VoiceAsrResponse)
+async def voice_asr(file: UploadFile = File(...)) -> VoiceAsrResponse:
+    try:
+        audio = await file.read()
+        profile = profile_data()
+        hotwords = await asr_hotwords_for_profile(profile)
+        text = await transcribe_audio(audio, file.content_type or "audio/webm")
+        text = await correct_asr_transcript(text, hotwords)
+        return VoiceAsrResponse(text=text, configured=True)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/voice/asr/stream")
+async def voice_asr_stream(file: UploadFile = File(...)) -> StreamingResponse:
+    try:
+        audio = await file.read()
+        profile = profile_data()
+        hotwords = await asr_hotwords_for_profile(profile)
+        text = await collect_text_stream(stream_transcribe_audio(audio, file.content_type or "audio/wav"))
+        text = await correct_asr_transcript(text, hotwords)
+        return StreamingResponse(iter_text_once(text), media_type="text/plain; charset=utf-8")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+async def collect_text_stream(stream) -> str:
+    parts = []
+    async for chunk in stream:
+        if isinstance(chunk, bytes):
+            parts.append(chunk.decode("utf-8", errors="replace"))
+        else:
+            parts.append(str(chunk))
+    return "".join(parts)
+
+
+async def iter_text_once(text: str):
+    yield text.encode("utf-8")
+
+
+@app.post("/api/voice/tts")
+async def voice_tts(request: VoiceTtsRequest) -> Response:
+    try:
+        audio, media_type = await synthesize_speech(request.text, request.referenceAudioDataUrl)
+        return Response(content=audio, media_type=media_type)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/voice/tts/stream")
+async def voice_tts_stream(request: VoiceTtsRequest) -> StreamingResponse:
+    try:
+        has_reference_voice = bool(request.referenceAudioDataUrl.strip()) or voice_clone_enabled()
+        audio_stream = stream_synthesize_speech(request.text, request.referenceAudioDataUrl)
+        media_type = "audio/wav" if has_reference_voice else "audio/pcm;rate=24000"
+        return StreamingResponse(audio_stream, media_type=media_type)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/api/resume/export", response_model=ExportResponse)
 async def export_resume(request: ExportRequest) -> ExportResponse:
     profile = profile_data()
-    base_markdown = local_match_resume(profile, request.jd, request.direction)
+    export_config = read_resume_export_config(settings.resolved_resume_export_config_path)
+    mode = active_resume_mode(export_config, request.mode)
+    template = active_resume_template(export_config, request.template)
+    base_markdown = local_match_resume(profile, request.jd, request.direction, mode)
     configured = deepseek_client.configured
-    note = "未配置 DeepSeek API Key，已使用本地资料生成保守匹配版本。"
+    note = f"未配置 DeepSeek API Key，已按“{mode['label']} / {template['label']}”生成本地保守匹配版本。"
 
     if configured and request.jd.strip():
         system_prompt = (
-            "你是简历改写助手。只能基于候选人资料优化表达、排序和重点，"
-            "不得新增未经资料支持的经历、成果、数字或技能。输出 Markdown 简历。"
+            "你是严谨的简历生成助手。只能基于候选人资料优化表达、排序和重点，"
+            "不得新增未经资料支持的经历、成果、数字、技能、公司或时间。"
+            "必须输出 Markdown 简历，不要代码围栏。"
+            "基础信息必须完整保留：姓名、职位、电话、邮箱、所在地、学历；资料中有出生日期时必须保留出生日期。"
+            "联系方式和出生日期只能来自候选人资料，不能猜测。"
+            "所有内容要适合招聘方阅读，优先保留与 JD 高相关的量化成果和技术证据。"
         )
         context = knowledge_context(profile)
+        birth = profile["meta"].get("birth") or profile["meta"].get("birthday") or "资料未写明"
         prompt = (
             f"候选人资料：\n{context}\n\n"
             f"岗位 JD：\n{request.jd}\n\n"
             f"目标方向：{request.direction}\n"
+            f"篇幅策略：{mode['label']}；目标页数：{mode['targetPages'] or '不限'}；"
+            f"核心能力最多 {mode['skillCount']} 条；每段经历最多 {mode['experienceBullets']} 条；"
+            f"项目最多 {mode['projectCount']} 个，每项目最多 {mode['projectBullets']} 条。\n"
+            f"模板策略：{template['label']}；{template.get('llmInstruction', '')}\n"
+            f"必须保留的基础信息：姓名={profile['meta'].get('name', '')}；电话={profile['meta'].get('phone', '')}；"
+            f"邮箱={profile['meta'].get('email', '')}；所在地={profile['meta'].get('location', '')}；"
+            f"学历={profile['meta'].get('education', '')}；出生日期={birth}。\n"
             f"基础简历草稿：\n{base_markdown}"
         )
         base_markdown = await deepseek_client.chat(
@@ -129,13 +338,22 @@ async def export_resume(request: ExportRequest) -> ExportResponse:
             ],
             settings.deepseek_export_model,
         )
-        note = "已基于 DeepSeek 和资料约束生成匹配简历。"
+        base_markdown = compact_resume_markdown(base_markdown, mode)
+        note = f"已基于 DeepSeek 和资料约束生成匹配简历，并按“{mode['label']} / {template['label']}”策略控制篇幅与版式。"
 
-    html = markdown_to_resume_html(base_markdown, request.template)
+    base_markdown = ensure_resume_header_metadata(base_markdown, profile, mode)
+    avatar_data = resume_avatar_data_url() if mode.get("includeAvatar") and template.get("showAvatar") else ""
+    html = markdown_to_resume_html(
+        base_markdown,
+        template=template,
+        mode=mode,
+        avatar_data_url=avatar_data,
+        branding=export_config.get("branding", {}),
+    )
     return ExportResponse(
         html=html,
         markdown=base_markdown,
-        filename=f"wangtao-{request.template}.html",
+        filename=f"wangtao-{template['key']}-{mode['key']}.html",
         configured=configured,
         note=note,
     )
@@ -149,9 +367,23 @@ async def export_resume_html(request: ExportRequest) -> str:
 
 @app.post("/api/admin/login", response_model=AdminLoginResponse)
 async def admin_login(request: AdminLoginRequest) -> AdminLoginResponse:
+    if settings.showcase_mode:
+        return AdminLoginResponse(
+            ok=True,
+            message="当前为展示项目模式：已免验证进入后台，可体验生成与预览，但保存会被拦截。",
+            showcaseMode=True,
+        )
     if not secrets.compare_digest(request.password, settings.admin_password):
         raise HTTPException(status_code=401, detail="管理密码不正确。")
-    return AdminLoginResponse(ok=True, message="已进入作者后台。")
+    return AdminLoginResponse(ok=True, message="已进入作者后台。", showcaseMode=False)
+
+
+@app.get("/api/admin/mode", response_model=AdminModeResponse)
+async def get_admin_mode() -> AdminModeResponse:
+    message = ""
+    if settings.showcase_mode:
+        message = "当前为展示项目模式：后台免验证，可体验生成与预览，但保存会被拦截。"
+    return AdminModeResponse(showcaseMode=settings.showcase_mode, message=message)
 
 
 @app.get("/api/admin/markdown", response_model=MarkdownDocumentResponse)
@@ -170,6 +402,7 @@ async def save_markdown(
     request: MarkdownSaveRequest,
     _: None = Depends(verify_admin_password),
 ) -> ReindexResponse:
+    require_persistence_enabled()
     write_markdown(settings.resolved_content_path, request.markdown)
     clear_briefing_cache()
     profile = profile_data()
@@ -254,6 +487,7 @@ async def save_home_briefing(
     request: AdminHomeBriefingSaveRequest,
     _: None = Depends(verify_admin_password),
 ) -> AdminHomeBriefingResponse:
+    require_persistence_enabled()
     profile = profile_data()
     normalized = await normalize_home_briefing(profile, request.briefing)
     write_briefing_override(settings.resolved_home_briefing_path, normalized)
@@ -263,6 +497,87 @@ async def save_home_briefing(
         saved=True,
         aiConfigured=deepseek_client.configured,
     )
+
+
+@app.get("/api/admin/site-style", response_model=SiteStyleResponse)
+async def get_admin_site_style(_: None = Depends(verify_admin_password)) -> SiteStyleResponse:
+    return SiteStyleResponse(**site_style_response(settings.resolved_site_style_path))
+
+
+@app.put("/api/admin/site-style", response_model=SiteStyleResponse)
+async def save_admin_site_style(
+    request: SiteStyleSaveRequest,
+    _: None = Depends(verify_admin_password),
+) -> SiteStyleResponse:
+    require_persistence_enabled()
+    write_site_style(settings.resolved_site_style_path, {"activeKey": request.activeKey})
+    return SiteStyleResponse(**site_style_response(settings.resolved_site_style_path))
+
+
+@app.get("/api/admin/resume-export-config", response_model=ResumeExportConfigResponse)
+async def get_admin_resume_export_config(_: None = Depends(verify_admin_password)) -> ResumeExportConfigResponse:
+    config = read_resume_export_config(settings.resolved_resume_export_config_path)
+    return ResumeExportConfigResponse(**config)
+
+
+@app.put("/api/admin/resume-export-config", response_model=ResumeExportConfigResponse)
+async def save_admin_resume_export_config(
+    request: ResumeExportConfigSaveRequest,
+    _: None = Depends(verify_admin_password),
+) -> ResumeExportConfigResponse:
+    require_persistence_enabled()
+    config = write_resume_export_config(settings.resolved_resume_export_config_path, request.model_dump())
+    return ResumeExportConfigResponse(**config)
+
+
+@app.get("/api/admin/resume-avatar", response_model=ResumeAvatarResponse)
+async def get_admin_resume_avatar(_: None = Depends(verify_admin_password)) -> ResumeAvatarResponse:
+    return ResumeAvatarResponse(**read_resume_avatar())
+
+
+@app.put("/api/admin/resume-avatar", response_model=ResumeAvatarResponse)
+async def save_admin_resume_avatar(
+    file: UploadFile = File(...),
+    _: None = Depends(verify_admin_password),
+) -> ResumeAvatarResponse:
+    require_persistence_enabled()
+    try:
+        image = await file.read()
+        result = save_resume_avatar(image, file.content_type or "", file.filename or "")
+        return ResumeAvatarResponse(**result)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/admin/resume-avatar", response_model=ResumeAvatarResponse)
+async def delete_admin_resume_avatar(_: None = Depends(verify_admin_password)) -> ResumeAvatarResponse:
+    require_persistence_enabled()
+    return ResumeAvatarResponse(**delete_resume_avatar())
+
+
+@app.get("/api/admin/voice-clone/reference", response_model=VoiceCloneReferenceResponse)
+async def get_admin_voice_clone_reference(_: None = Depends(verify_admin_password)) -> VoiceCloneReferenceResponse:
+    return VoiceCloneReferenceResponse(**read_voice_clone_reference())
+
+
+@app.put("/api/admin/voice-clone/reference", response_model=VoiceCloneReferenceResponse)
+async def save_admin_voice_clone_reference(
+    file: UploadFile = File(...),
+    _: None = Depends(verify_admin_password),
+) -> VoiceCloneReferenceResponse:
+    require_persistence_enabled()
+    try:
+        audio = await file.read()
+        result = save_voice_clone_reference(audio, file.content_type or "", file.filename or "")
+        return VoiceCloneReferenceResponse(**result)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/admin/voice-clone/reference", response_model=VoiceCloneReferenceResponse)
+async def delete_admin_voice_clone_reference(_: None = Depends(verify_admin_password)) -> VoiceCloneReferenceResponse:
+    require_persistence_enabled()
+    return VoiceCloneReferenceResponse(**delete_voice_clone_reference())
 
 
 @app.post("/api/admin/import")
@@ -282,6 +597,20 @@ async def reindex(_: None = Depends(verify_admin_password)) -> ReindexResponse:
     clear_briefing_cache()
     profile = profile_data()
     return ReindexResponse(sections=len(profile["sections"]), message="资料索引已重建。")
+
+
+@app.get("/{path:path}", include_in_schema=False)
+async def serve_frontend(path: str) -> FileResponse:
+    static_path = settings.resolved_static_dir
+    if not static_path:
+        raise HTTPException(status_code=404, detail="Not Found")
+    index_path = static_path / "index.html"
+    requested_path = (static_path / path).resolve()
+    if requested_path.is_file() and str(requested_path).startswith(str(static_path)):
+        return FileResponse(requested_path)
+    if index_path.exists():
+        return FileResponse(index_path)
+    raise HTTPException(status_code=404, detail="Not Found")
 
 
 async def normalize_home_briefing(profile: dict, briefing: dict) -> dict:
@@ -314,13 +643,13 @@ def local_answer(question: str, profile: dict) -> str:
     )
     if any(token in q for token in ["语音", "ai", "agent", "llm", "智能"]):
         return (
-            f"适合。{name}的经历集中在语音智能、AI Agent、ASR/TTS/KWS、"
-            "LLM 微调、RAG 和工程落地。他在欧瑞博负责语音 Agent 和智能家居中控，"
-            "并有 P95 首 token 从 10s 降到 1s、成本降低 95%、ASR/TTS 成本降低 60% 等结果。"
-            "\n\n依据：profile.md、工作经历、项目详情。"
+            f"适合。{name}的主线集中在语音智能、AI Agent、ASR/TTS/KWS 和工程落地。"
+            "在欧瑞博的语音 Agent 项目里，资料记录了 P95 首 token 从 10s 降到 1s、"
+            "链路成本降低 95%、ASR/TTS 成本降低 60% 等结果。需要我展开技术难点吗？"
+            "\n\n依据：工作经历 / 项目详情。"
         )
     return (
-        f"{name}的核心能力包括：{highlights}。"
-        "当前后端未配置 DeepSeek API Key，因此这是基于本地资料的保守回答。"
-        "\n\n依据：profile.md、核心能力、项目详情。"
+        f"{name}的核心能力可以概括为：{highlights}。"
+        "这是基于本地资料的保守回答，可以继续追问某段经历或某个项目。"
+        "\n\n依据：profile.md / 核心能力 / 项目详情。"
     )
