@@ -78,6 +78,7 @@ DEFAULT_RESUME_EXPORT_CONFIG: dict[str, Any] = {
             "fontFamily": "Microsoft YaHei, Arial, sans-serif",
             "headerStyle": "plain",
             "showAvatar": False,
+            "avatarPlacement": "header-right",
             "footerEnabled": True,
             "llmInstruction": "输出 ATS 友好的单栏 Markdown，少用装饰性表达，联系方式和基础信息必须完整。",
         },
@@ -90,6 +91,7 @@ DEFAULT_RESUME_EXPORT_CONFIG: dict[str, Any] = {
             "fontFamily": "Inter, Microsoft YaHei, Arial, sans-serif",
             "headerStyle": "profile",
             "showAvatar": True,
+            "avatarPlacement": "sidebar-top",
             "footerEnabled": True,
             "llmInstruction": "输出适合双栏视觉模板的 Markdown，摘要短、经历证据强，避免过长段落。",
         },
@@ -102,6 +104,7 @@ DEFAULT_RESUME_EXPORT_CONFIG: dict[str, Any] = {
             "fontFamily": "Microsoft YaHei, Arial, sans-serif",
             "headerStyle": "compact",
             "showAvatar": False,
+            "avatarPlacement": "header-right",
             "footerEnabled": True,
             "llmInstruction": "按时间线组织经历，每段保留角色、技术栈、量化结果和可验证证据。",
         },
@@ -114,6 +117,7 @@ DEFAULT_RESUME_EXPORT_CONFIG: dict[str, Any] = {
             "fontFamily": "Inter, Microsoft YaHei, Arial, sans-serif",
             "headerStyle": "band",
             "showAvatar": False,
+            "avatarPlacement": "header-right",
             "footerEnabled": True,
             "llmInstruction": "优先提炼技术栈、系统职责、性能优化和工程交付，不写泛泛软技能。",
         },
@@ -126,6 +130,7 @@ DEFAULT_RESUME_EXPORT_CONFIG: dict[str, Any] = {
             "fontFamily": "Arial, Microsoft YaHei, sans-serif",
             "headerStyle": "plain",
             "showAvatar": False,
+            "avatarPlacement": "header-right",
             "footerEnabled": True,
             "llmInstruction": "极度精简，所有 bullet 优先使用动词开头和结果导向表达，避免重复。",
         },
@@ -135,7 +140,7 @@ DEFAULT_RESUME_EXPORT_CONFIG: dict[str, Any] = {
         "enabled": True,
         "githubUrl": "https://github.com/wuhuaha/resume-html",
         "author": "王涛",
-        "text": "本简历由开源项目 AI Profile Page 生成",
+        "text": "本简历由开源项目 Resume HTML 生成",
     },
 }
 
@@ -160,6 +165,7 @@ TEMPLATE_FIELDS = {
     "accent": 32,
     "fontFamily": 160,
     "headerStyle": 32,
+    "avatarPlacement": 32,
     "llmInstruction": 300,
 }
 
@@ -261,6 +267,8 @@ def normalize_template(fallback: dict[str, Any], raw: dict[str, Any]) -> dict[st
         value = raw.get(field)
         if isinstance(value, str) and value.strip():
             result[field] = value.strip()[:max_length]
+    if result.get("avatarPlacement") not in {"header-right", "sidebar-top"}:
+        result["avatarPlacement"] = "sidebar-top" if result.get("layout") == "sidebar" else "header-right"
     result["showAvatar"] = bool(raw.get("showAvatar", fallback.get("showAvatar", False)))
     result["footerEnabled"] = bool(raw.get("footerEnabled", fallback.get("footerEnabled", True)))
     return result

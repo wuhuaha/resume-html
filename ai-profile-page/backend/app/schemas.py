@@ -59,6 +59,7 @@ class ResumeAvatarResponse(BaseModel):
     contentType: str = ""
     size: int = 0
     updatedAt: str = ""
+    dataUrl: str = ""
     message: str = ""
 
 
@@ -99,6 +100,7 @@ class AdminLoginResponse(BaseModel):
     ok: bool
     message: str
     showcaseMode: bool = False
+    adminMode: bool = False
 
 
 class AdminModeResponse(BaseModel):

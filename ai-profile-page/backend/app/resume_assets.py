@@ -28,6 +28,7 @@ def read_resume_avatar() -> dict:
         "contentType": meta.get("contentType", guess_content_type(avatar_path)),
         "size": int(meta.get("size", avatar_path.stat().st_size)),
         "updatedAt": meta.get("updatedAt", ""),
+        "dataUrl": avatar_data_url_from_path(avatar_path, meta.get("contentType") or guess_content_type(avatar_path)),
         "message": "已配置简历头像，导出模板可按配置显示。",
     }
 
@@ -76,7 +77,11 @@ def resume_avatar_data_url() -> str:
     if not meta or not avatar_path or not avatar_path.exists():
         return ""
     content_type = meta.get("contentType") or guess_content_type(avatar_path)
-    encoded = base64.b64encode(avatar_path.read_bytes()).decode("ascii")
+    return avatar_data_url_from_path(avatar_path, content_type)
+
+
+def avatar_data_url_from_path(path: Path, content_type: str) -> str:
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
     return f"data:{content_type};base64,{encoded}"
 
 
@@ -131,5 +136,6 @@ def empty_avatar(message: str = "") -> dict:
         "contentType": "",
         "size": 0,
         "updatedAt": "",
+        "dataUrl": "",
         "message": message,
     }

@@ -35,6 +35,19 @@
           <n-button type="primary" size="large" :loading="loading" @click="enterShowcase">
             进入体验后台
           </n-button>
+          <div class="admin-switch-login">
+            <n-input
+              v-model:value="adminPasswordInput"
+              size="large"
+              type="password"
+              show-password-on="mousedown"
+              placeholder="管理密码"
+              @keyup.enter="switchToAdminMode"
+            />
+            <n-button size="large" :loading="adminModeLoading" @click="switchToAdminMode">
+              切换到管理员模式
+            </n-button>
+          </div>
         </div>
 
         <n-alert v-if="status" class="admin-alert" :type="statusType" :bordered="false">
@@ -52,14 +65,39 @@
             资料库维护事实 Markdown；首页编排调整公开页面展示。手动和 AI 能力都在同一个入口内完成。
           </p>
           <p v-if="showcaseMode" class="showcase-inline-note">
-            {{ showcaseNotice }}
+            {{ adminMode ? "当前已切换到管理员模式，保存会真实写入线上内容。" : showcaseNotice }}
           </p>
         </div>
         <div class="admin-head-actions">
+          <span v-if="showcaseMode" :class="['save-state', adminMode ? 'is-admin' : 'is-demo']">
+            {{ adminMode ? "管理员模式" : "体验模式" }}
+          </span>
           <span :class="['save-state', activeDirty ? 'is-dirty' : '']">{{ activeDirty ? "有未保存修改" : "已同步" }}</span>
+          <n-button v-if="showcaseMode && !adminMode" secondary type="primary" @click="showAdminSwitch = !showAdminSwitch">
+            切换到管理员模式
+          </n-button>
           <n-button quaternary @click="logout">退出</n-button>
         </div>
       </header>
+
+      <section v-if="showcaseMode && showAdminSwitch && !adminMode" class="admin-switch-panel">
+        <div>
+          <h2>管理员模式</h2>
+          <p>输入管理密码后，本页保存、上传、删除等操作会真实写入线上内容。</p>
+        </div>
+        <div class="admin-switch-form">
+          <n-input
+            v-model:value="adminPasswordInput"
+            type="password"
+            show-password-on="mousedown"
+            placeholder="管理密码"
+            @keyup.enter="switchToAdminMode"
+          />
+          <n-button type="primary" :loading="adminModeLoading" @click="switchToAdminMode">
+            确认切换
+          </n-button>
+        </div>
+      </section>
 
       <div class="admin-mode-tabs">
         <button type="button" :class="{ active: mode === 'content' }" @click="mode = 'content'">
@@ -85,7 +123,7 @@
       </div>
 
       <n-alert v-if="showcaseMode" class="admin-alert showcase-alert" type="warning" :bordered="false">
-        当前处于展示项目模式：后台已免验证。你可以体验导入、AI 生成、首页编排、风格预览和导出策略调整；点击保存会返回失败提示，不会写入公开首页或线上内容。
+        {{ adminMode ? "当前处于管理员模式：保存、上传和删除会真实写入线上内容，请确认后操作。" : "当前处于展示项目模式：后台已免验证。你可以体验导入、AI 生成、首页编排、风格预览和导出策略调整；如需保存，请点击“切换到管理员模式”并输入管理密码。" }}
       </n-alert>
 
       <section v-if="mode === 'content'" class="ai-two-column">
@@ -93,7 +131,7 @@
           <section class="admin-action-section">
             <div class="admin-section-heading">
               <h2>写入</h2>
-              <p>{{ showcaseMode ? "展示模式下可编辑草稿和体验保存失败提示，但不会写入内容源。" : "保存当前 Markdown，或重新读取内容源。" }}</p>
+              <p>{{ showcaseMode && !adminMode ? "展示模式下可编辑草稿；切换到管理员模式后可保存到内容源。" : "保存当前 Markdown，或重新读取内容源。" }}</p>
             </div>
 
             <div class="button-row">
@@ -191,7 +229,7 @@
           <section class="admin-action-section">
             <div class="admin-section-heading">
               <h2>调整首页</h2>
-              <p>{{ showcaseMode ? "展示模式下可生成首页草稿并预览，但不能保存到公开首页。" : "这里改的是展示编排层，不会修改 Markdown 事实资料。" }}</p>
+              <p>{{ showcaseMode && !adminMode ? "展示模式下可生成首页草稿并预览；切换到管理员模式后可保存到公开首页。" : "这里改的是展示编排层，不会修改 Markdown 事实资料。" }}</p>
             </div>
 
             <div class="ai-preset-list">
@@ -247,7 +285,7 @@
           <section class="admin-action-section">
             <div class="admin-section-heading">
               <h2>风格预设</h2>
-              <p>{{ showcaseMode ? "展示模式下可切换并预览风格，保存会被后端拦截，不影响公开页面。" : "参考设计系统审美抽象为项目内置预设。选择后先预览，保存后公开页面生效。" }}</p>
+              <p>{{ showcaseMode && !adminMode ? "展示模式下可切换并预览风格；切换到管理员模式后保存会让公开页面生效。" : "参考设计系统审美抽象为项目内置预设。选择后先预览，保存后公开页面生效。" }}</p>
             </div>
 
             <div class="style-preset-list">
@@ -347,7 +385,7 @@
           <section class="admin-action-section">
             <div class="admin-section-heading">
               <h2>导出策略</h2>
-              <p>{{ showcaseMode ? "展示模式下可调整导出策略体验配置，但不能保存为线上默认策略。" : "控制 ATS 一页纸和其他导出模式的内容预算、版面密度和保留范围。" }}</p>
+              <p>{{ showcaseMode && !adminMode ? "展示模式下可调整导出策略体验配置；切换到管理员模式后可保存为线上默认策略。" : "控制 ATS 一页纸和其他导出模式的内容预算、版面密度和保留范围。" }}</p>
             </div>
 
             <div class="style-preset-list">
@@ -506,16 +544,19 @@
                   <option value="compact">紧凑</option>
                 </select>
               </label>
+              <label>
+                <span>头像位置</span>
+                <select v-model="activeResumeTemplate.avatarPlacement" @change="touchResumeConfig">
+                  <option value="header-right">页眉右侧</option>
+                  <option value="sidebar-top">侧栏顶部</option>
+                </select>
+              </label>
               <label class="full-row">
                 <span>LLM 模板策略</span>
                 <textarea v-model="activeResumeTemplate.llmInstruction" rows="3" @input="touchResumeConfig"></textarea>
               </label>
             </div>
             <div class="resume-config-toggles">
-              <label>
-                <input v-model="activeResumeTemplate.showAvatar" type="checkbox" @change="touchResumeConfig" />
-                <span>该模板支持头像</span>
-              </label>
               <label>
                 <input v-model="activeResumeTemplate.footerEnabled" type="checkbox" @change="touchResumeConfig" />
                 <span>显示开源项目页脚</span>
@@ -525,18 +566,25 @@
 
           <div class="resume-config-section">
             <div class="admin-section-heading inline-heading">
-              <h2>头像与开源署名</h2>
-              <p>头像会保存为导出资产，HTML 导出时内嵌；展示模式下保存会被拦截。</p>
+              <h2>导出头像</h2>
+              <p>{{ resumeAvatarExportHint }}</p>
             </div>
-            <div class="resume-avatar-row">
+            <div class="resume-avatar-row enhanced">
               <div class="resume-avatar-preview">
-                <span>{{ resumeAvatar.enabled ? "已上传头像" : "未上传头像" }}</span>
-                <strong>{{ resumeAvatar.filename || "可选 JPG / PNG / WebP" }}</strong>
-                <small v-if="resumeAvatar.size">{{ formatBytes(resumeAvatar.size) }}</small>
+                <img v-if="resumeAvatarPreviewUrl" :src="resumeAvatarPreviewUrl" alt="简历头像预览" />
+                <div v-else class="resume-avatar-placeholder">
+                  <Upload :size="22" />
+                </div>
+                <div>
+                  <span>{{ resumeAvatar.enabled ? "当前导出头像" : "未上传头像" }}</span>
+                  <strong>{{ resumeAvatar.filename || resumeAvatarFileName || "可选 JPG / PNG / WebP" }}</strong>
+                  <small v-if="resumeAvatar.size">{{ formatBytes(resumeAvatar.size) }}</small>
+                  <small>{{ resumeAvatarPlacementText }}</small>
+                </div>
               </div>
               <label class="avatar-upload-button">
                 <Upload :size="18" />
-                <span>{{ resumeAvatarFileName || "选择头像" }}</span>
+                <span>{{ resumeAvatarFileName || "上传照片头像" }}</span>
                 <input type="file" accept="image/png,image/jpeg,image/webp" @change="selectResumeAvatarFile" />
               </label>
               <n-button :disabled="!resumeAvatarFile" :loading="resumeAvatarSaving" @click="saveResumeAvatarFile">
@@ -546,6 +594,23 @@
               <n-button :disabled="!resumeAvatar.enabled" @click="clearResumeAvatar">
                 删除头像
               </n-button>
+            </div>
+            <div class="resume-config-toggles">
+              <label>
+                <input v-model="activeResumeMode.includeAvatar" type="checkbox" @change="touchResumeConfig" />
+                <span>当前篇幅模式允许导出头像</span>
+              </label>
+              <label>
+                <input v-model="activeResumeTemplate.showAvatar" type="checkbox" @change="touchResumeConfig" />
+                <span>当前模板显示头像</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="resume-config-section">
+            <div class="admin-section-heading inline-heading">
+              <h2>开源署名</h2>
+              <p>导出 HTML/PDF 底部显示开源项目来源、作者和仓库地址。</p>
             </div>
             <div class="resume-config-grid">
               <label>
@@ -590,7 +655,7 @@
             <div class="admin-section-heading">
               <h2>参考音色</h2>
               <p>
-                {{ showcaseMode ? "展示模式下参考音色只保存在当前浏览器，用于本机首页体验，不写入服务器。" : "上传或录制一段 WAV/MP3 参考音频，首页回答将使用小米音色复刻合成。" }}
+                {{ showcaseMode && !adminMode ? "展示模式下参考音色只保存在当前浏览器，用于本机首页体验，不写入服务器。" : "上传或录制一段 WAV/MP3 参考音频，首页回答将使用小米音色复刻合成。" }}
               </p>
             </div>
 
@@ -689,7 +754,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { NAlert, NButton, NInput } from "naive-ui";
 import {
   Bot,
@@ -761,6 +826,10 @@ const mode = ref("content");
 const password = ref(getStoredAdminPassword());
 const authenticated = ref(false);
 const showcaseMode = ref(false);
+const adminMode = ref(false);
+const showAdminSwitch = ref(false);
+const adminPasswordInput = ref("");
+const adminModeLoading = ref(false);
 const loading = ref(false);
 const status = ref("");
 const statusType = ref("info");
@@ -793,17 +862,18 @@ const resumeConfig = ref({
   sectionOrder: ["summary", "skills", "experience", "projects", "awards"],
   branding: {
     enabled: true,
-    githubUrl: "https://github.com/wuhuaha/ai-profile-page",
+    githubUrl: "https://github.com/wuhuaha/resume-html",
     author: "王涛",
-    text: "本简历由开源项目 AI Profile Page 生成",
+    text: "本简历由开源项目 Resume HTML 生成",
   },
 });
 const resumeConfigLoading = ref(false);
 const resumeConfigSaving = ref(false);
 const resumeConfigDirty = ref(false);
-const resumeAvatar = ref({ enabled: false, filename: "", contentType: "", size: 0, updatedAt: "", message: "" });
+const resumeAvatar = ref({ enabled: false, filename: "", contentType: "", size: 0, updatedAt: "", dataUrl: "", message: "" });
 const resumeAvatarFile = ref(null);
 const resumeAvatarFileName = ref("");
+const resumeAvatarLocalPreview = ref("");
 const resumeAvatarSaving = ref(false);
 const voiceReference = ref({ enabled: false, filename: "", contentType: "", size: 0, updatedAt: "", message: "" });
 const voiceReferenceLoading = ref(false);
@@ -821,7 +891,7 @@ const localVoiceReferenceName = ref(localStorage.getItem("ai-profile-voice-clone
 const localVoiceReferenceSize = ref(Number(localStorage.getItem("ai-profile-voice-clone-reference-size") || 0));
 const showcaseNotice = "当前为展示项目模式：后台免验证，可体验生成与预览；保存会被拦截，不会写入公开首页或线上内容。";
 
-const adminPassword = computed(() => getStoredAdminPassword() || password.value);
+const adminPassword = computed(() => (adminMode.value ? getStoredAdminPassword() || password.value : ""));
 const displayPath = computed(() => {
   if (!documentPath.value) return "content/profile.md";
   return documentPath.value.split(/[\\/]/).slice(-3).join("/");
@@ -846,10 +916,23 @@ const estimatedBulletBudget = computed(() => {
     + awards
   );
 });
+const resumeAvatarPreviewUrl = computed(() => resumeAvatarLocalPreview.value || resumeAvatar.value.dataUrl || "");
+const resumeAvatarPlacementText = computed(() => {
+  if (!activeResumeMode.value.includeAvatar) return "当前篇幅模式未启用头像";
+  if (!activeResumeTemplate.value.showAvatar) return "当前模板未显示头像";
+  if (!resumeAvatar.value.enabled && !resumeAvatarFile.value) return "上传后将用于 HTML/PDF 导出";
+  return activeResumeTemplate.value.avatarPlacement === "sidebar-top" ? "导出位置：左侧栏顶部" : "导出位置：页眉右侧";
+});
+const resumeAvatarExportHint = computed(() => {
+  if (showcaseMode.value && !adminMode.value) {
+    return "展示模式下可选择头像预览，但不会写入服务器；切换到管理员模式后可保存为导出资产。";
+  }
+  return "上传照片头像后，可通过篇幅模式和模板开关决定是否出现在导出的 HTML/PDF 中。";
+});
 const activeDirty = computed(() => {
   if (mode.value === "content") return markdownDirty.value;
   if (mode.value === "home") return homeDirty.value;
-  if (mode.value === "resume") return resumeConfigDirty.value;
+  if (mode.value === "resume") return resumeConfigDirty.value || Boolean(resumeAvatarFile.value);
   if (mode.value === "voice") return false;
   return selectedStyleKey.value !== publishedStyleKey.value;
 });
@@ -865,14 +948,19 @@ onMounted(async () => {
   }
 });
 
+onBeforeUnmount(() => {
+  clearResumeAvatarLocalPreview();
+  if (recordedVoiceUrl.value) URL.revokeObjectURL(recordedVoiceUrl.value);
+});
+
 function setStatus(message, type = "info") {
   status.value = message;
   statusType.value = type;
 }
 
 function formatSaveError(error, target = "保存") {
-  if (showcaseMode.value) {
-    return `${target}失败：当前为展示项目模式，可体验生成和预览，但不会保存到首页或写入线上内容。`;
+  if (showcaseMode.value && !adminMode.value) {
+    return `${target}失败：当前为展示项目模式，可体验生成和预览；请切换到管理员模式并输入管理密码后再保存。`;
   }
   return `${target}失败：${error.message}`;
 }
@@ -894,6 +982,8 @@ async function enterShowcase() {
     clearStoredAdminPassword();
     authenticated.value = true;
     showcaseMode.value = Boolean(result.showcaseMode);
+    adminMode.value = Boolean(result.adminMode);
+    showAdminSwitch.value = false;
     await Promise.all([loadMarkdown(), loadHomeBriefing(), loadSiteStyle(), loadResumeConfig(), loadResumeAvatar(), loadVoiceReference()]);
     setStatus(result.message || showcaseNotice, "warning");
   } catch (error) {
@@ -915,8 +1005,10 @@ async function login() {
     setStoredAdminPassword(password.value);
     authenticated.value = true;
     showcaseMode.value = Boolean(result.showcaseMode);
+    adminMode.value = Boolean(result.adminMode || !result.showcaseMode);
+    showAdminSwitch.value = false;
     await Promise.all([loadMarkdown(), loadHomeBriefing(), loadSiteStyle(), loadResumeConfig(), loadResumeAvatar(), loadVoiceReference()]);
-    setStatus(result.message, result.showcaseMode ? "warning" : "success");
+    setStatus(result.message, adminMode.value ? "success" : "warning");
   } catch (error) {
     clearStoredAdminPassword();
     authenticated.value = false;
@@ -926,9 +1018,43 @@ async function login() {
   }
 }
 
+async function switchToAdminMode() {
+  const nextPassword = adminPasswordInput.value.trim();
+  if (!nextPassword) {
+    setStatus("请输入管理密码。", "warning");
+    return;
+  }
+  adminModeLoading.value = true;
+  try {
+    const result = await adminLogin(nextPassword);
+    if (!result.adminMode) {
+      setStatus("管理密码不正确，仍处于体验模式。", "error");
+      return;
+    }
+    setStoredAdminPassword(nextPassword);
+    password.value = nextPassword;
+    adminPasswordInput.value = "";
+    adminMode.value = true;
+    authenticated.value = true;
+    showcaseMode.value = Boolean(result.showcaseMode);
+    showAdminSwitch.value = false;
+    await Promise.all([loadMarkdown(), loadHomeBriefing(), loadSiteStyle(), loadResumeConfig(), loadResumeAvatar(), loadVoiceReference()]);
+    setStatus(result.message || "已切换到管理员模式。", "success");
+  } catch (error) {
+    clearStoredAdminPassword();
+    adminMode.value = false;
+    setStatus(`切换管理员模式失败：${error.message}`, "error");
+  } finally {
+    adminModeLoading.value = false;
+  }
+}
+
 function logout() {
   clearStoredAdminPassword();
   password.value = "";
+  adminPasswordInput.value = "";
+  adminMode.value = false;
+  showAdminSwitch.value = false;
   authenticated.value = false;
   markdown.value = "";
   documentPath.value = "";
@@ -938,6 +1064,7 @@ function logout() {
   resumeConfigDirty.value = false;
   markdownDirty.value = false;
   homeDirty.value = false;
+  clearResumeAvatarLocalPreview();
   clearThemePreview();
   if (recordedVoiceUrl.value) URL.revokeObjectURL(recordedVoiceUrl.value);
   setStatus("");
@@ -1108,7 +1235,7 @@ async function loadResumeConfig() {
   try {
     resumeConfig.value = await getAdminResumeExportConfig(adminPassword.value);
     if (!resumeConfig.value.branding) {
-      resumeConfig.value.branding = { enabled: true, githubUrl: "", author: "王涛", text: "本简历由开源项目 AI Profile Page 生成" };
+      resumeConfig.value.branding = { enabled: true, githubUrl: "https://github.com/wuhuaha/resume-html", author: "王涛", text: "本简历由开源项目 Resume HTML 生成" };
     }
     resumeConfigDirty.value = false;
   } catch (error) {
@@ -1155,17 +1282,31 @@ async function loadResumeAvatar() {
 
 function selectResumeAvatarFile(event) {
   const selected = event.target.files?.[0] || null;
+  clearResumeAvatarLocalPreview();
   resumeAvatarFile.value = selected;
   resumeAvatarFileName.value = selected?.name || "";
+  if (selected) {
+    try {
+      validateResumeAvatarFile(selected);
+      resumeAvatarLocalPreview.value = URL.createObjectURL(selected);
+    } catch (error) {
+      resumeAvatarFile.value = null;
+      resumeAvatarFileName.value = "";
+      setStatus(error.message, "error");
+    }
+  }
+  event.target.value = "";
 }
 
 async function saveResumeAvatarFile() {
   if (!resumeAvatarFile.value) return;
   resumeAvatarSaving.value = true;
   try {
+    validateResumeAvatarFile(resumeAvatarFile.value);
     resumeAvatar.value = await saveResumeAvatar(adminPassword.value, resumeAvatarFile.value, resumeAvatarFile.value.name || "resume-avatar.png");
     resumeAvatarFile.value = null;
     resumeAvatarFileName.value = "";
+    clearResumeAvatarLocalPreview();
     setStatus("简历头像已保存，支持头像的模板导出时会使用。", "success");
   } catch (error) {
     setStatus(formatSaveError(error, "头像保存"), "error");
@@ -1176,10 +1317,29 @@ async function saveResumeAvatarFile() {
 
 async function clearResumeAvatar() {
   try {
+    resumeAvatarFile.value = null;
+    resumeAvatarFileName.value = "";
+    clearResumeAvatarLocalPreview();
     resumeAvatar.value = await deleteResumeAvatar(adminPassword.value);
     setStatus("简历头像已删除。", "success");
   } catch (error) {
     setStatus(formatSaveError(error, "头像删除"), "error");
+  }
+}
+
+function validateResumeAvatarFile(file) {
+  if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) {
+    throw new Error("简历头像只支持 JPG、PNG 或 WebP。");
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    throw new Error("头像文件不能超过 2 MB。");
+  }
+}
+
+function clearResumeAvatarLocalPreview() {
+  if (resumeAvatarLocalPreview.value) {
+    URL.revokeObjectURL(resumeAvatarLocalPreview.value);
+    resumeAvatarLocalPreview.value = "";
   }
 }
 
@@ -1230,7 +1390,7 @@ async function saveRecordedVoiceReference() {
 async function saveVoiceReferenceBlob(blob, filename) {
   const normalized = blob.type.includes("wav") ? blob : await convertBlobToWav(blob);
   validateVoiceReferenceBlob(normalized);
-  if (showcaseMode.value) {
+  if (showcaseMode.value && !adminMode.value) {
     const dataUrl = await blobToDataUrl(normalized);
     localStorage.setItem("ai-profile-voice-clone-reference", dataUrl);
     localStorage.setItem("ai-profile-voice-clone-reference-name", filename);
@@ -1253,7 +1413,7 @@ async function clearVoiceReference() {
     localVoiceReference.value = "";
     localVoiceReferenceName.value = "";
     localVoiceReferenceSize.value = 0;
-    if (!showcaseMode.value) {
+    if (!showcaseMode.value || adminMode.value) {
       voiceReference.value = await deleteVoiceCloneReference(adminPassword.value);
     }
     setStatus("已恢复默认音色。", "success");

@@ -10,6 +10,24 @@
         <a href="#timeline">{{ page.nav.timeline }}</a>
         <a href="#projects">{{ page.nav.projects }}</a>
         <a href="/resume/export">{{ page.nav.export }}</a>
+        <a
+          class="deploy-link"
+          href="https://github.com/wuhuaha/resume-html/blob/main/ai-profile-page/docs/DEPLOYMENT.md"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          我也要部署
+        </a>
+        <a
+          class="github-source-link"
+          href="https://github.com/wuhuaha/resume-html"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="打开 GitHub 开源项目"
+        >
+          <Github :size="17" />
+          <span>GitHub</span>
+        </a>
         <a class="ghost-link" href="/admin">{{ page.nav.admin }}</a>
         <ThemeSwitcher />
       </div>

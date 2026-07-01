@@ -141,6 +141,41 @@ p {
   color: var(--ink);
 }
 
+.deploy-link,
+.github-source-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  white-space: nowrap;
+}
+
+.deploy-link {
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 46%, var(--line));
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 850;
+}
+
+.nav-actions .deploy-link:hover {
+  color: #ffffff;
+  background: color-mix(in srgb, var(--accent) 86%, var(--ink));
+}
+
+.github-source-link {
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+  color: var(--ink);
+  font-weight: 780;
+}
+
+.github-source-link svg {
+  flex: 0 0 auto;
+}
+
 .theme-switcher {
   display: inline-flex;
   align-items: center;
@@ -944,6 +979,12 @@ p {
   margin-top: 28px;
 }
 
+.admin-switch-login {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
 .preview-toolbar {
   display: flex;
   align-items: flex-start;
@@ -986,6 +1027,47 @@ p {
   border-color: rgba(180, 83, 9, 0.22);
   background: rgba(255, 247, 237, 0.86);
   color: #9a3412;
+}
+
+.save-state.is-admin {
+  border-color: rgba(21, 128, 61, 0.24);
+  background: rgba(240, 253, 244, 0.9);
+  color: #15803d;
+}
+
+.save-state.is-demo {
+  border-color: rgba(180, 83, 9, 0.22);
+  background: rgba(255, 247, 237, 0.86);
+  color: #9a3412;
+}
+
+.admin-switch-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 18px;
+  align-items: center;
+  margin: -10px 0 22px;
+  padding: 18px;
+  border: 1px solid rgba(180, 83, 9, 0.22);
+  border-radius: var(--radius);
+  background: rgba(255, 247, 237, 0.78);
+}
+
+.admin-switch-panel h2 {
+  color: var(--ink);
+  font-size: 1.18rem;
+}
+
+.admin-switch-panel p {
+  margin-top: 6px;
+  color: #9a3412;
+  font-size: 0.9rem;
+}
+
+.admin-switch-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
 }
 
 .showcase-alert {
@@ -1496,6 +1578,10 @@ p {
   margin-top: 16px;
 }
 
+.resume-avatar-row.enhanced {
+  grid-template-columns: minmax(260px, 1fr) minmax(160px, auto) auto auto;
+}
+
 .resume-avatar-preview,
 .avatar-upload-button {
   display: grid;
@@ -1508,14 +1594,43 @@ p {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
 }
 
+.resume-avatar-preview {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  min-height: 112px;
+}
+
+.resume-avatar-preview img,
+.resume-avatar-placeholder {
+  width: 76px;
+  height: 92px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.resume-avatar-preview img {
+  object-fit: cover;
+  background: #fff;
+}
+
+.resume-avatar-placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+}
+
 .resume-avatar-preview span,
 .resume-avatar-preview small {
+  display: block;
   color: var(--muted);
   font-size: 0.78rem;
 }
 
 .resume-avatar-preview strong {
+  display: block;
   color: var(--ink);
+  word-break: break-word;
 }
 
 .avatar-upload-button {
@@ -1524,6 +1639,13 @@ p {
   color: var(--accent);
   cursor: pointer;
   font-weight: 800;
+}
+
+.avatar-upload-button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .avatar-upload-button input {
@@ -1943,9 +2065,21 @@ p {
 @media (max-width: 760px) {
   .site-shell,
   .page-shell,
-  .page-shell.compact {
+  .page-shell.compact,
+  .page-shell.compact.admin-page {
     width: min(100% - 24px, 1180px);
     padding-bottom: 56px;
+  }
+
+  .admin-page,
+  .admin-page .workspace-panel,
+  .admin-page .preview-panel,
+  .resume-config-section,
+  .resume-config-grid,
+  .resume-avatar-row,
+  .resume-avatar-preview,
+  .avatar-upload-button {
+    min-width: 0;
   }
 
   .top-nav,
@@ -1953,6 +2087,8 @@ p {
   .workbench-topline,
   .assistant-heading,
   .admin-head-actions,
+  .admin-switch-login,
+  .admin-switch-form,
   .preview-toolbar,
   .section-title,
   .export-cta {
@@ -2063,13 +2199,30 @@ p {
     grid-template-columns: 1fr;
   }
 
+  .admin-mode-tabs {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+
+  .admin-mode-tabs button {
+    flex: 0 0 auto;
+  }
+
   .capability-grid,
   .fit-grid,
   .project-list,
   .export-option-grid,
   .resume-config-grid,
   .resume-budget-preview,
-  .resume-avatar-row {
+  .resume-avatar-row,
+  .admin-switch-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-avatar-row.enhanced {
     grid-template-columns: 1fr;
   }
 

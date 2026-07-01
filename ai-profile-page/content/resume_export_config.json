@@ -70,6 +70,7 @@
       "fontFamily": "Microsoft YaHei, Arial, sans-serif",
       "headerStyle": "plain",
       "showAvatar": false,
+      "avatarPlacement": "header-right",
       "footerEnabled": true,
       "llmInstruction": "输出 ATS 友好的单栏 Markdown，少用装饰性表达，联系方式和基础信息必须完整。"
     },
@@ -82,6 +83,7 @@
       "fontFamily": "Inter, Microsoft YaHei, Arial, sans-serif",
       "headerStyle": "profile",
       "showAvatar": true,
+      "avatarPlacement": "sidebar-top",
       "footerEnabled": true,
       "llmInstruction": "输出适合双栏视觉模板的 Markdown，摘要短、经历证据强，避免过长段落。"
     },
@@ -94,6 +96,7 @@
       "fontFamily": "Microsoft YaHei, Arial, sans-serif",
       "headerStyle": "compact",
       "showAvatar": false,
+      "avatarPlacement": "header-right",
       "footerEnabled": true,
       "llmInstruction": "按时间线组织经历，每段保留角色、技术栈、量化结果和可验证证据。"
     },
@@ -106,6 +109,7 @@
       "fontFamily": "Inter, Microsoft YaHei, Arial, sans-serif",
       "headerStyle": "band",
       "showAvatar": false,
+      "avatarPlacement": "header-right",
       "footerEnabled": true,
       "llmInstruction": "优先提炼技术栈、系统职责、性能优化和工程交付，不写泛泛软技能。"
     },
@@ -118,6 +122,7 @@
       "fontFamily": "Arial, Microsoft YaHei, sans-serif",
       "headerStyle": "plain",
       "showAvatar": false,
+      "avatarPlacement": "header-right",
       "footerEnabled": true,
       "llmInstruction": "极度精简，所有 bullet 优先使用动词开头和结果导向表达，避免重复。"
     }
@@ -131,8 +136,8 @@
   ],
   "branding": {
     "enabled": true,
-    "githubUrl": "https://github.com/wuhuaha/ai-profile-page",
+    "githubUrl": "https://github.com/wuhuaha/resume-html",
     "author": "王涛",
-    "text": "本简历由开源项目 AI Profile Page 生成"
+    "text": "本简历由开源项目 Resume HTML 生成"
   }
 }

@@ -87,18 +87,25 @@ def profile_data() -> dict:
     return load_profile(settings.resolved_content_path)
 
 
-def verify_admin_password(x_admin_password: str = Header(default="")) -> None:
+def has_valid_admin_password(password: str) -> bool:
+    return bool(password) and secrets.compare_digest(password, settings.admin_password)
+
+
+def verify_admin_password(x_admin_password: str = Header(default="")) -> str:
     if settings.showcase_mode:
+        if has_valid_admin_password(x_admin_password):
+            return x_admin_password
         return
-    if not secrets.compare_digest(x_admin_password, settings.admin_password):
+    if not has_valid_admin_password(x_admin_password):
         raise HTTPException(status_code=401, detail="管理密码不正确。")
+    return x_admin_password
 
 
-def require_persistence_enabled() -> None:
-    if settings.showcase_mode:
+def require_persistence_enabled(admin_password: str = "") -> None:
+    if settings.showcase_mode and not has_valid_admin_password(admin_password):
         raise HTTPException(
             status_code=403,
-            detail="当前为展示项目模式：后台免验证，可体验生成与预览，但不会保存到首页或写入线上内容。",
+            detail="当前为展示项目模式：免验证只能体验生成与预览。请切换到管理员模式并输入管理密码后再保存。",
         )
 
 
@@ -368,21 +375,29 @@ async def export_resume_html(request: ExportRequest) -> str:
 @app.post("/api/admin/login", response_model=AdminLoginResponse)
 async def admin_login(request: AdminLoginRequest) -> AdminLoginResponse:
     if settings.showcase_mode:
+        if has_valid_admin_password(request.password):
+            return AdminLoginResponse(
+                ok=True,
+                message="已切换到管理员模式：当前保存会真实写入线上内容。",
+                showcaseMode=True,
+                adminMode=True,
+            )
         return AdminLoginResponse(
             ok=True,
-            message="当前为展示项目模式：已免验证进入后台，可体验生成与预览，但保存会被拦截。",
+            message="当前为展示项目模式：已免验证进入后台，可体验生成与预览；如需保存，请切换到管理员模式并输入管理密码。",
             showcaseMode=True,
+            adminMode=False,
         )
     if not secrets.compare_digest(request.password, settings.admin_password):
         raise HTTPException(status_code=401, detail="管理密码不正确。")
-    return AdminLoginResponse(ok=True, message="已进入作者后台。", showcaseMode=False)
+    return AdminLoginResponse(ok=True, message="已进入作者后台。", showcaseMode=False, adminMode=True)
 
 
 @app.get("/api/admin/mode", response_model=AdminModeResponse)
 async def get_admin_mode() -> AdminModeResponse:
     message = ""
     if settings.showcase_mode:
-        message = "当前为展示项目模式：后台免验证，可体验生成与预览，但保存会被拦截。"
+        message = "当前为展示项目模式：后台免验证，可体验生成与预览；输入管理密码后可切换到管理员模式进行保存。"
     return AdminModeResponse(showcaseMode=settings.showcase_mode, message=message)
 
 
@@ -400,9 +415,9 @@ async def get_markdown(_: None = Depends(verify_admin_password)) -> MarkdownDocu
 @app.put("/api/admin/markdown", response_model=ReindexResponse)
 async def save_markdown(
     request: MarkdownSaveRequest,
-    _: None = Depends(verify_admin_password),
+    admin_password: str = Depends(verify_admin_password),
 ) -> ReindexResponse:
-    require_persistence_enabled()
+    require_persistence_enabled(admin_password)
     write_markdown(settings.resolved_content_path, request.markdown)
     clear_briefing_cache()
     profile = profile_data()
@@ -485,9 +500,9 @@ async def ai_edit_home_briefing(
 @app.put("/api/admin/home-briefing", response_model=AdminHomeBriefingResponse)
 async def save_home_briefing(
     request: AdminHomeBriefingSaveRequest,
-    _: None = Depends(verify_admin_password),
+    admin_password: str = Depends(verify_admin_password),
 ) -> AdminHomeBriefingResponse:
-    require_persistence_enabled()
+    require_persistence_enabled(admin_password)
     profile = profile_data()
     normalized = await normalize_home_briefing(profile, request.briefing)
     write_briefing_override(settings.resolved_home_briefing_path, normalized)
@@ -507,9 +522,9 @@ async def get_admin_site_style(_: None = Depends(verify_admin_password)) -> Site
 @app.put("/api/admin/site-style", response_model=SiteStyleResponse)
 async def save_admin_site_style(
     request: SiteStyleSaveRequest,
-    _: None = Depends(verify_admin_password),
+    admin_password: str = Depends(verify_admin_password),
 ) -> SiteStyleResponse:
-    require_persistence_enabled()
+    require_persistence_enabled(admin_password)
     write_site_style(settings.resolved_site_style_path, {"activeKey": request.activeKey})
     return SiteStyleResponse(**site_style_response(settings.resolved_site_style_path))
 
@@ -523,9 +538,9 @@ async def get_admin_resume_export_config(_: None = Depends(verify_admin_password
 @app.put("/api/admin/resume-export-config", response_model=ResumeExportConfigResponse)
 async def save_admin_resume_export_config(
     request: ResumeExportConfigSaveRequest,
-    _: None = Depends(verify_admin_password),
+    admin_password: str = Depends(verify_admin_password),
 ) -> ResumeExportConfigResponse:
-    require_persistence_enabled()
+    require_persistence_enabled(admin_password)
     config = write_resume_export_config(settings.resolved_resume_export_config_path, request.model_dump())
     return ResumeExportConfigResponse(**config)
 
@@ -538,9 +553,9 @@ async def get_admin_resume_avatar(_: None = Depends(verify_admin_password)) -> R
 @app.put("/api/admin/resume-avatar", response_model=ResumeAvatarResponse)
 async def save_admin_resume_avatar(
     file: UploadFile = File(...),
-    _: None = Depends(verify_admin_password),
+    admin_password: str = Depends(verify_admin_password),
 ) -> ResumeAvatarResponse:
-    require_persistence_enabled()
+    require_persistence_enabled(admin_password)
     try:
         image = await file.read()
         result = save_resume_avatar(image, file.content_type or "", file.filename or "")
@@ -550,8 +565,8 @@ async def save_admin_resume_avatar(
 
 
 @app.delete("/api/admin/resume-avatar", response_model=ResumeAvatarResponse)
-async def delete_admin_resume_avatar(_: None = Depends(verify_admin_password)) -> ResumeAvatarResponse:
-    require_persistence_enabled()
+async def delete_admin_resume_avatar(admin_password: str = Depends(verify_admin_password)) -> ResumeAvatarResponse:
+    require_persistence_enabled(admin_password)
     return ResumeAvatarResponse(**delete_resume_avatar())
 
 
@@ -563,9 +578,9 @@ async def get_admin_voice_clone_reference(_: None = Depends(verify_admin_passwor
 @app.put("/api/admin/voice-clone/reference", response_model=VoiceCloneReferenceResponse)
 async def save_admin_voice_clone_reference(
     file: UploadFile = File(...),
-    _: None = Depends(verify_admin_password),
+    admin_password: str = Depends(verify_admin_password),
 ) -> VoiceCloneReferenceResponse:
-    require_persistence_enabled()
+    require_persistence_enabled(admin_password)
     try:
         audio = await file.read()
         result = save_voice_clone_reference(audio, file.content_type or "", file.filename or "")
@@ -575,8 +590,8 @@ async def save_admin_voice_clone_reference(
 
 
 @app.delete("/api/admin/voice-clone/reference", response_model=VoiceCloneReferenceResponse)
-async def delete_admin_voice_clone_reference(_: None = Depends(verify_admin_password)) -> VoiceCloneReferenceResponse:
-    require_persistence_enabled()
+async def delete_admin_voice_clone_reference(admin_password: str = Depends(verify_admin_password)) -> VoiceCloneReferenceResponse:
+    require_persistence_enabled(admin_password)
     return VoiceCloneReferenceResponse(**delete_voice_clone_reference())
 
 

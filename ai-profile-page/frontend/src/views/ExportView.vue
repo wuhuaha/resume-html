@@ -7,6 +7,24 @@
       </a>
       <div class="nav-actions">
         <a href="/">返回首页</a>
+        <a
+          class="deploy-link"
+          href="https://github.com/wuhuaha/resume-html/blob/main/ai-profile-page/docs/DEPLOYMENT.md"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          我也要部署
+        </a>
+        <a
+          class="github-source-link"
+          href="https://github.com/wuhuaha/resume-html"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="打开 GitHub 开源项目"
+        >
+          <Github :size="17" />
+          <span>GitHub</span>
+        </a>
         <ThemeSwitcher />
       </div>
     </nav>
