@@ -969,6 +969,7 @@ const homeGenerationStatusText = computed(() => {
   if (homeGenerationState.value === "loading") return "加载中";
   if (homeGenerationState.value === "saving") return "保存中";
   if (homeGenerationState.value === "failed") return "失败";
+  if (homeDirty.value && homeBriefing.value && !homeBriefing.value.generated) return "本地草稿未保存";
   if (homeDirty.value) return "草稿未保存";
   if (homeSaved.value) return "已保存";
   return homeSourceLabel.value;
@@ -979,6 +980,7 @@ const homeGenerationTitle = computed(() => {
   if (homeGenerationState.value === "loading") return "正在读取首页编排";
   if (homeGenerationState.value === "saving") return "正在保存首页编排";
   if (homeGenerationState.value === "failed") return "首页编排操作失败";
+  if (homeDirty.value && homeBriefing.value && !homeBriefing.value.generated) return "已生成本地首页草稿，尚未保存";
   if (homeDirty.value) return "首页草稿已更新，尚未保存";
   if (homeSaved.value) return "当前显示已发布首页编排";
   return "首页编排状态";
@@ -998,6 +1000,9 @@ const homeGenerationMessage = computed(() => {
   }
   if (homeGenerationState.value === "failed") {
     return homeGenerationError.value || "请检查网络、模型配置或后端日志后重试。";
+  }
+  if (homeDirty.value && homeBriefing.value && !homeBriefing.value.generated) {
+    return "模型未返回可用首页结构时会回退为本地解析草稿；确认预览无误后仍可保存。";
   }
   if (homeDirty.value) {
     return "右侧预览已更新，但还只是草稿；点击“保存首页”后才会成为公开首页。";
@@ -1116,6 +1121,10 @@ function rememberHomeGenerationMeta(payload = {}) {
     generated: Boolean(meta.generated ?? briefing?.generated),
     durationMs: homeGenerationElapsedMs.value || Number(meta.durationMs || 0),
   };
+}
+
+function isLlmGeneratedBriefing(briefing) {
+  return Boolean(briefing?.aiConfigured && briefing?.generated);
 }
 
 function formatSaveError(error, target = "保存") {
@@ -1356,9 +1365,12 @@ async function regenerateHomeFromMarkdown() {
     homeSaved.value = false;
     homeDirty.value = true;
     finishHomeGeneration("idle", { briefing: result });
+    const llmGenerated = isLlmGeneratedBriefing(result);
     setStatus(
-      result.aiConfigured ? `已通过 ${result.aiProvider || "LLM"} 基于当前 Markdown 重新生成首页草稿。` : "已基于当前 Markdown 生成本地首页草稿；后端未配置 LLM API Key。",
-      result.aiConfigured ? "success" : "warning",
+      llmGenerated
+        ? `已通过 ${result.aiProvider || "LLM"} 基于当前 Markdown 重新生成首页草稿。`
+        : "已基于当前 Markdown 生成本地首页草稿；模型未配置或未返回可用首页结构。",
+      llmGenerated ? "success" : "warning",
     );
   } catch (error) {
     finishHomeGeneration("failed", { error: `首页重新生成失败：${error.message}` });
