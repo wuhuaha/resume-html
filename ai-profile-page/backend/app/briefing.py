@@ -157,11 +157,15 @@ def local_briefing(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def generate_briefing(profile: dict[str, Any], *, use_override: bool = True) -> dict[str, Any]:
+async def generate_briefing(profile: dict[str, Any], *, use_override: bool = True, allow_llm: bool = True) -> dict[str, Any]:
     if use_override:
         override = read_briefing_override(settings.resolved_home_briefing_path, profile)
         if override:
             return deepcopy(override)
+
+    fallback = local_briefing(profile)
+    if not allow_llm:
+        return deepcopy(fallback)
 
     cache_key = briefing_cache_key(profile)
     if cache_key in _briefing_cache:
@@ -173,7 +177,6 @@ async def generate_briefing(profile: dict[str, Any], *, use_override: bool = Tru
         }
         return cached
 
-    fallback = local_briefing(profile)
     if not deepseek_client.configured:
         _briefing_cache[cache_key] = fallback
         return deepcopy(fallback)

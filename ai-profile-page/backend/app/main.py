@@ -130,7 +130,7 @@ async def get_profile() -> dict:
 @app.get("/api/briefing", response_model=BriefingResponse)
 async def get_briefing() -> BriefingResponse:
     profile = profile_data()
-    briefing = await generate_briefing(profile)
+    briefing = await generate_briefing(profile, allow_llm=False)
     return BriefingResponse(**briefing)
 
 
