@@ -138,10 +138,11 @@ def local_briefing(profile: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def generate_briefing(profile: dict[str, Any]) -> dict[str, Any]:
-    override = read_briefing_override(settings.resolved_home_briefing_path, profile)
-    if override:
-        return deepcopy(override)
+async def generate_briefing(profile: dict[str, Any], *, use_override: bool = True) -> dict[str, Any]:
+    if use_override:
+        override = read_briefing_override(settings.resolved_home_briefing_path, profile)
+        if override:
+            return deepcopy(override)
 
     cache_key = briefing_cache_key(profile)
     if cache_key in _briefing_cache:

@@ -464,7 +464,7 @@ async def preview_briefing(
     _: None = Depends(verify_admin_password),
 ) -> BriefingResponse:
     profile = parse_profile_markdown(request.markdown)
-    briefing = await generate_briefing(profile)
+    briefing = await generate_briefing(profile, use_override=False)
     return BriefingResponse(**briefing)
 
 

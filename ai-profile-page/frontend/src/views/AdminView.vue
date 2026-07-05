@@ -1198,6 +1198,7 @@ async function runHomeEdit() {
 async function regenerateHomeFromMarkdown() {
   if (!markdown.value.trim()) return;
   homeRegenerating.value = true;
+  setStatus("正在基于当前 Markdown 重新生成首页草稿，请稍候。", "info");
   try {
     const result = await previewMarkdownBriefing(adminPassword.value, markdown.value);
     homeBriefing.value = result;
