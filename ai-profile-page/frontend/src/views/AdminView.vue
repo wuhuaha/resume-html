@@ -35,6 +35,19 @@
           <n-button type="primary" size="large" :loading="loading" @click="enterShowcase">
             进入体验后台
           </n-button>
+          <div class="admin-switch-login">
+            <n-input
+              v-model:value="adminPasswordInput"
+              size="large"
+              type="password"
+              show-password-on="mousedown"
+              placeholder="管理密码"
+              @keyup.enter="switchToAdminMode"
+            />
+            <n-button size="large" :loading="adminModeLoading" @click="switchToAdminMode">
+              切换到管理员模式
+            </n-button>
+          </div>
         </div>
 
         <n-alert v-if="status" class="admin-alert" :type="statusType" :bordered="false">
@@ -52,14 +65,39 @@
             资料库维护事实 Markdown；首页编排调整公开页面展示。手动和 AI 能力都在同一个入口内完成。
           </p>
           <p v-if="showcaseMode" class="showcase-inline-note">
-            {{ showcaseNotice }}
+            {{ adminMode ? "当前已切换到管理员模式，保存会真实写入线上内容。" : showcaseNotice }}
           </p>
         </div>
         <div class="admin-head-actions">
+          <span v-if="showcaseMode" :class="['save-state', adminMode ? 'is-admin' : 'is-demo']">
+            {{ adminMode ? "管理员模式" : "体验模式" }}
+          </span>
           <span :class="['save-state', activeDirty ? 'is-dirty' : '']">{{ activeDirty ? "有未保存修改" : "已同步" }}</span>
+          <n-button v-if="showcaseMode && !adminMode" secondary type="primary" @click="showAdminSwitch = !showAdminSwitch">
+            切换到管理员模式
+          </n-button>
           <n-button quaternary @click="logout">退出</n-button>
         </div>
       </header>
+
+      <section v-if="showcaseMode && showAdminSwitch && !adminMode" class="admin-switch-panel">
+        <div>
+          <h2>管理员模式</h2>
+          <p>输入管理密码后，本页保存、上传、删除等操作会真实写入线上内容。</p>
+        </div>
+        <div class="admin-switch-form">
+          <n-input
+            v-model:value="adminPasswordInput"
+            type="password"
+            show-password-on="mousedown"
+            placeholder="管理密码"
+            @keyup.enter="switchToAdminMode"
+          />
+          <n-button type="primary" :loading="adminModeLoading" @click="switchToAdminMode">
+            确认切换
+          </n-button>
+        </div>
+      </section>
 
       <div class="admin-mode-tabs">
         <button type="button" :class="{ active: mode === 'content' }" @click="mode = 'content'">
@@ -85,7 +123,7 @@
       </div>
 
       <n-alert v-if="showcaseMode" class="admin-alert showcase-alert" type="warning" :bordered="false">
-        当前处于展示项目模式：后台已免验证。你可以体验导入、AI 生成、首页编排、风格预览和导出策略调整；点击保存会返回失败提示，不会写入公开首页或线上内容。
+        {{ adminMode ? "当前处于管理员模式：保存、上传和删除会真实写入线上内容，请确认后操作。" : "当前处于展示项目模式：后台已免验证。你可以体验导入、AI 生成、首页编排、风格预览和导出策略调整；如需保存，请点击“切换到管理员模式”并输入管理密码。" }}
       </n-alert>
 
       <section v-if="mode === 'content'" class="ai-two-column">
@@ -93,7 +131,7 @@
           <section class="admin-action-section">
             <div class="admin-section-heading">
               <h2>写入</h2>
-              <p>{{ showcaseMode ? "展示模式下可编辑草稿和体验保存失败提示，但不会写入内容源。" : "保存当前 Markdown，或重新读取内容源。" }}</p>
+              <p>{{ showcaseMode && !adminMode ? "展示模式下可编辑草稿；切换到管理员模式后可保存到内容源。" : "保存当前 Markdown，或重新读取内容源。" }}</p>
             </div>
 
             <div class="button-row">
@@ -191,7 +229,39 @@
           <section class="admin-action-section">
             <div class="admin-section-heading">
               <h2>调整首页</h2>
-              <p>{{ showcaseMode ? "展示模式下可生成首页草稿并预览，但不能保存到公开首页。" : "这里改的是展示编排层，不会修改 Markdown 事实资料。" }}</p>
+              <p>{{ showcaseMode && !adminMode ? "展示模式下可基于当前 Markdown 生成首页草稿并预览；切换到管理员模式后可保存到公开首页。" : "修改 Markdown 后，先重新生成首页草稿，确认预览后再保存首页。" }}</p>
+            </div>
+
+            <n-button
+              block
+              type="primary"
+              size="large"
+              :loading="homeRegenerating"
+              :disabled="!markdown.trim()"
+              @click="regenerateHomeFromMarkdown"
+            >
+              <template #icon><RefreshCw :size="18" /></template>
+              基于当前 Markdown 重新生成首页
+            </n-button>
+
+            <p class="admin-flow-hint">
+              适合在资料库 Markdown 修改后使用；下方“按说明微调”只会继续调整当前首页草稿。
+            </p>
+
+            <div class="home-generation-panel" :class="`is-${homeGenerationTone}`" aria-live="polite">
+              <div class="home-generation-head">
+                <span class="home-generation-dot" :class="{ running: homeGenerationRunning }"></span>
+                <div>
+                  <strong>{{ homeGenerationTitle }}</strong>
+                  <p>{{ homeGenerationMessage }}</p>
+                </div>
+              </div>
+              <div class="home-generation-meta">
+                <span>{{ homeGenerationStatusText }}</span>
+                <span v-if="homeGenerationProvider">{{ homeGenerationProvider }}</span>
+                <span v-if="homeGenerationModel">{{ homeGenerationModel }}</span>
+                <span v-if="homeGenerationDuration">{{ homeGenerationDuration }}</span>
+              </div>
             </div>
 
             <div class="ai-preset-list">
@@ -210,7 +280,7 @@
             <div class="ai-command-row">
               <n-button type="primary" :loading="homeAiLoading" :disabled="!homeInstruction.trim()" @click="runHomeEdit">
                 <template #icon><Bot :size="18" /></template>
-                生成首页草稿
+                按说明微调草稿
               </n-button>
               <n-button :loading="homeLoading" @click="loadHomeBriefing">
                 <template #icon><RefreshCw :size="18" /></template>
@@ -235,7 +305,10 @@
               <h2>{{ previewTitle }}</h2>
             </div>
             <div class="admin-doc-stats">
-              <span>{{ homeBriefing?.generated ? "LLM 生成" : "本地解析" }}</span>
+              <span>{{ homeSourceLabel }}</span>
+              <span v-if="homeGenerationProvider">{{ homeGenerationProvider }}</span>
+              <span v-if="homeGenerationModel">{{ homeGenerationModel }}</span>
+              <span v-if="homeGenerationDuration">{{ homeGenerationDuration }}</span>
             </div>
           </div>
           <BriefingPreview :briefing="homeBriefing" variant="wide" />
@@ -247,7 +320,7 @@
           <section class="admin-action-section">
             <div class="admin-section-heading">
               <h2>风格预设</h2>
-              <p>{{ showcaseMode ? "展示模式下可切换并预览风格，保存会被后端拦截，不影响公开页面。" : "参考设计系统审美抽象为项目内置预设。选择后先预览，保存后公开页面生效。" }}</p>
+              <p>{{ showcaseMode && !adminMode ? "展示模式下可切换并预览风格；切换到管理员模式后保存会让公开页面生效。" : "参考设计系统审美抽象为项目内置预设。选择后先预览，保存后公开页面生效。" }}</p>
             </div>
 
             <div class="style-preset-list">
@@ -347,7 +420,7 @@
           <section class="admin-action-section">
             <div class="admin-section-heading">
               <h2>导出策略</h2>
-              <p>{{ showcaseMode ? "展示模式下可调整导出策略体验配置，但不能保存为线上默认策略。" : "控制 ATS 一页纸和其他导出模式的内容预算、版面密度和保留范围。" }}</p>
+              <p>{{ showcaseMode && !adminMode ? "展示模式下可调整导出策略体验配置；切换到管理员模式后可保存为线上默认策略。" : "控制 ATS 一页纸和其他导出模式的内容预算、版面密度和保留范围。" }}</p>
             </div>
 
             <div class="style-preset-list">
@@ -506,16 +579,19 @@
                   <option value="compact">紧凑</option>
                 </select>
               </label>
+              <label>
+                <span>头像位置</span>
+                <select v-model="activeResumeTemplate.avatarPlacement" @change="touchResumeConfig">
+                  <option value="header-right">页眉右侧</option>
+                  <option value="sidebar-top">侧栏顶部</option>
+                </select>
+              </label>
               <label class="full-row">
                 <span>LLM 模板策略</span>
                 <textarea v-model="activeResumeTemplate.llmInstruction" rows="3" @input="touchResumeConfig"></textarea>
               </label>
             </div>
             <div class="resume-config-toggles">
-              <label>
-                <input v-model="activeResumeTemplate.showAvatar" type="checkbox" @change="touchResumeConfig" />
-                <span>该模板支持头像</span>
-              </label>
               <label>
                 <input v-model="activeResumeTemplate.footerEnabled" type="checkbox" @change="touchResumeConfig" />
                 <span>显示开源项目页脚</span>
@@ -525,18 +601,25 @@
 
           <div class="resume-config-section">
             <div class="admin-section-heading inline-heading">
-              <h2>头像与开源署名</h2>
-              <p>头像会保存为导出资产，HTML 导出时内嵌；展示模式下保存会被拦截。</p>
+              <h2>导出头像</h2>
+              <p>{{ resumeAvatarExportHint }}</p>
             </div>
-            <div class="resume-avatar-row">
+            <div class="resume-avatar-row enhanced">
               <div class="resume-avatar-preview">
-                <span>{{ resumeAvatar.enabled ? "已上传头像" : "未上传头像" }}</span>
-                <strong>{{ resumeAvatar.filename || "可选 JPG / PNG / WebP" }}</strong>
-                <small v-if="resumeAvatar.size">{{ formatBytes(resumeAvatar.size) }}</small>
+                <img v-if="resumeAvatarPreviewUrl" :src="resumeAvatarPreviewUrl" alt="简历头像预览" />
+                <div v-else class="resume-avatar-placeholder">
+                  <Upload :size="22" />
+                </div>
+                <div>
+                  <span>{{ resumeAvatar.enabled ? "当前导出头像" : "未上传头像" }}</span>
+                  <strong>{{ resumeAvatar.filename || resumeAvatarFileName || "可选 JPG / PNG / WebP" }}</strong>
+                  <small v-if="resumeAvatar.size">{{ formatBytes(resumeAvatar.size) }}</small>
+                  <small>{{ resumeAvatarPlacementText }}</small>
+                </div>
               </div>
               <label class="avatar-upload-button">
                 <Upload :size="18" />
-                <span>{{ resumeAvatarFileName || "选择头像" }}</span>
+                <span>{{ resumeAvatarFileName || "上传照片头像" }}</span>
                 <input type="file" accept="image/png,image/jpeg,image/webp" @change="selectResumeAvatarFile" />
               </label>
               <n-button :disabled="!resumeAvatarFile" :loading="resumeAvatarSaving" @click="saveResumeAvatarFile">
@@ -546,6 +629,23 @@
               <n-button :disabled="!resumeAvatar.enabled" @click="clearResumeAvatar">
                 删除头像
               </n-button>
+            </div>
+            <div class="resume-config-toggles">
+              <label>
+                <input v-model="activeResumeMode.includeAvatar" type="checkbox" @change="touchResumeConfig" />
+                <span>当前篇幅模式允许导出头像</span>
+              </label>
+              <label>
+                <input v-model="activeResumeTemplate.showAvatar" type="checkbox" @change="touchResumeConfig" />
+                <span>当前模板显示头像</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="resume-config-section">
+            <div class="admin-section-heading inline-heading">
+              <h2>开源署名</h2>
+              <p>导出 HTML/PDF 底部显示开源项目来源、作者和仓库地址。</p>
             </div>
             <div class="resume-config-grid">
               <label>
@@ -590,7 +690,7 @@
             <div class="admin-section-heading">
               <h2>参考音色</h2>
               <p>
-                {{ showcaseMode ? "展示模式下参考音色只保存在当前浏览器，用于本机首页体验，不写入服务器。" : "上传或录制一段 WAV/MP3 参考音频，首页回答将使用小米音色复刻合成。" }}
+                {{ showcaseMode && !adminMode ? "展示模式下参考音色只保存在当前浏览器，用于本机首页体验，不写入服务器。" : "上传或录制一段 WAV/MP3 参考音频，首页回答将使用小米音色复刻合成。" }}
               </p>
             </div>
 
@@ -689,7 +789,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { NAlert, NButton, NInput } from "naive-ui";
 import {
   Bot,
@@ -722,6 +822,7 @@ import {
   getResumeAvatar,
   getVoiceCloneReference,
   importDocument,
+  previewMarkdownBriefing,
   reindexContent,
   saveAdminSiteStyle,
   saveAdminResumeExportConfig,
@@ -761,6 +862,10 @@ const mode = ref("content");
 const password = ref(getStoredAdminPassword());
 const authenticated = ref(false);
 const showcaseMode = ref(false);
+const adminMode = ref(false);
+const showAdminSwitch = ref(false);
+const adminPasswordInput = ref("");
+const adminModeLoading = ref(false);
 const loading = ref(false);
 const status = ref("");
 const statusType = ref("info");
@@ -782,7 +887,16 @@ const homeDirty = ref(false);
 const homeSaved = ref(false);
 const homeLoading = ref(false);
 const homeAiLoading = ref(false);
+const homeRegenerating = ref(false);
 const homeSaving = ref(false);
+const homeGenerationState = ref("idle");
+const homeGenerationAction = ref("");
+const homeGenerationStartedAt = ref(0);
+const homeGenerationFinishedAt = ref(0);
+const homeGenerationElapsedMs = ref(0);
+const homeGenerationError = ref("");
+const homeGenerationMeta = ref(null);
+let homeGenerationTimer = null;
 const selectedStyleKey = ref(activeKey.value);
 const styleSaving = ref(false);
 const resumeConfig = ref({
@@ -793,17 +907,18 @@ const resumeConfig = ref({
   sectionOrder: ["summary", "skills", "experience", "projects", "awards"],
   branding: {
     enabled: true,
-    githubUrl: "https://github.com/wuhuaha/ai-profile-page",
+    githubUrl: "https://github.com/wuhuaha/resume-html",
     author: "王涛",
-    text: "本简历由开源项目 AI Profile Page 生成",
+    text: "本简历由开源项目 Resume HTML 生成",
   },
 });
 const resumeConfigLoading = ref(false);
 const resumeConfigSaving = ref(false);
 const resumeConfigDirty = ref(false);
-const resumeAvatar = ref({ enabled: false, filename: "", contentType: "", size: 0, updatedAt: "", message: "" });
+const resumeAvatar = ref({ enabled: false, filename: "", contentType: "", size: 0, updatedAt: "", dataUrl: "", message: "" });
 const resumeAvatarFile = ref(null);
 const resumeAvatarFileName = ref("");
+const resumeAvatarLocalPreview = ref("");
 const resumeAvatarSaving = ref(false);
 const voiceReference = ref({ enabled: false, filename: "", contentType: "", size: 0, updatedAt: "", message: "" });
 const voiceReferenceLoading = ref(false);
@@ -821,12 +936,82 @@ const localVoiceReferenceName = ref(localStorage.getItem("ai-profile-voice-clone
 const localVoiceReferenceSize = ref(Number(localStorage.getItem("ai-profile-voice-clone-reference-size") || 0));
 const showcaseNotice = "当前为展示项目模式：后台免验证，可体验生成与预览；保存会被拦截，不会写入公开首页或线上内容。";
 
-const adminPassword = computed(() => getStoredAdminPassword() || password.value);
+const adminPassword = computed(() => (adminMode.value ? getStoredAdminPassword() || password.value : ""));
 const displayPath = computed(() => {
   if (!documentPath.value) return "content/profile.md";
   return documentPath.value.split(/[\\/]/).slice(-3).join("/");
 });
 const previewTitle = computed(() => homeBriefing.value?.hero?.statement || "等待生成首页编排");
+const homeGenerationRunning = computed(() => ["regenerating", "editing", "loading", "saving"].includes(homeGenerationState.value));
+const homeGenerationTone = computed(() => {
+  if (homeGenerationState.value === "failed") return "failed";
+  if (homeGenerationRunning.value) return "running";
+  if (homeDirty.value) return "draft";
+  if (homeSaved.value) return "saved";
+  return "idle";
+});
+const homeGenerationProvider = computed(() => homeGenerationMeta.value?.provider || homeBriefing.value?.aiProvider || "");
+const homeGenerationModel = computed(() => homeGenerationMeta.value?.model || "");
+const homeGenerationDuration = computed(() => {
+  const elapsed = homeGenerationElapsedMs.value || Number(homeGenerationMeta.value?.durationMs || 0);
+  if (!elapsed) return "";
+  if (elapsed < 1000) return `${elapsed} ms`;
+  return `${(elapsed / 1000).toFixed(1)} s`;
+});
+const homeSourceLabel = computed(() => {
+  if (!homeBriefing.value) return "未生成";
+  if (homeBriefing.value.generated) return "LLM 生成";
+  return "本地解析";
+});
+const homeGenerationStatusText = computed(() => {
+  if (homeGenerationState.value === "regenerating") return "重新生成中";
+  if (homeGenerationState.value === "editing") return "AI 微调中";
+  if (homeGenerationState.value === "loading") return "加载中";
+  if (homeGenerationState.value === "saving") return "保存中";
+  if (homeGenerationState.value === "failed") return "失败";
+  if (homeDirty.value && homeBriefing.value && !homeBriefing.value.generated) return "本地草稿未保存";
+  if (homeDirty.value) return "草稿未保存";
+  if (homeSaved.value) return "已保存";
+  return homeSourceLabel.value;
+});
+const homeGenerationTitle = computed(() => {
+  if (homeGenerationState.value === "regenerating") return "正在重新生成首页编排";
+  if (homeGenerationState.value === "editing") return "正在按说明微调首页草稿";
+  if (homeGenerationState.value === "loading") return "正在读取首页编排";
+  if (homeGenerationState.value === "saving") return "正在保存首页编排";
+  if (homeGenerationState.value === "failed") return "首页编排操作失败";
+  if (homeDirty.value && homeBriefing.value && !homeBriefing.value.generated) return "已生成本地首页草稿，尚未保存";
+  if (homeDirty.value) return "首页草稿已更新，尚未保存";
+  if (homeSaved.value) return "当前显示已发布首页编排";
+  return "首页编排状态";
+});
+const homeGenerationMessage = computed(() => {
+  if (homeGenerationState.value === "regenerating") {
+    return "后端正在读取当前 Markdown 并调用模型生成新的首页结构，完成后会自动刷新右侧预览。";
+  }
+  if (homeGenerationState.value === "editing") {
+    return "模型正在基于当前首页草稿和你的说明调整展示文案与排序。";
+  }
+  if (homeGenerationState.value === "loading") {
+    return "正在同步服务端保存的首页编排和上次生成信息。";
+  }
+  if (homeGenerationState.value === "saving") {
+    return "正在写入公开首页配置，完成后访客页面会使用该版本。";
+  }
+  if (homeGenerationState.value === "failed") {
+    return homeGenerationError.value || "请检查网络、模型配置或后端日志后重试。";
+  }
+  if (homeDirty.value && homeBriefing.value && !homeBriefing.value.generated) {
+    return homeGenerationMeta.value?.error || "模型未返回可用首页结构时会回退为本地解析草稿；确认预览无误后仍可保存。";
+  }
+  if (homeDirty.value) {
+    return "右侧预览已更新，但还只是草稿；点击“保存首页”后才会成为公开首页。";
+  }
+  if (homeSaved.value) {
+    return "这是服务端当前保存的首页编排，可继续基于 Markdown 重新生成或按说明微调。";
+  }
+  return "点击“基于当前 Markdown 重新生成首页”后，这里会显示进度、模型和耗时。";
+});
 const selectedStyle = computed(() => stylePresets.value.find((preset) => preset.key === selectedStyleKey.value) || activeTheme.value);
 const activeResumeMode = computed(() => {
   const modes = resumeConfig.value.modes || {};
@@ -846,10 +1031,23 @@ const estimatedBulletBudget = computed(() => {
     + awards
   );
 });
+const resumeAvatarPreviewUrl = computed(() => resumeAvatarLocalPreview.value || resumeAvatar.value.dataUrl || "");
+const resumeAvatarPlacementText = computed(() => {
+  if (!activeResumeMode.value.includeAvatar) return "当前篇幅模式未启用头像";
+  if (!activeResumeTemplate.value.showAvatar) return "当前模板未显示头像";
+  if (!resumeAvatar.value.enabled && !resumeAvatarFile.value) return "上传后将用于 HTML/PDF 导出";
+  return activeResumeTemplate.value.avatarPlacement === "sidebar-top" ? "导出位置：左侧栏顶部" : "导出位置：页眉右侧";
+});
+const resumeAvatarExportHint = computed(() => {
+  if (showcaseMode.value && !adminMode.value) {
+    return "展示模式下可选择头像预览，但不会写入服务器；切换到管理员模式后可保存为导出资产。";
+  }
+  return "上传照片头像后，可通过篇幅模式和模板开关决定是否出现在导出的 HTML/PDF 中。";
+});
 const activeDirty = computed(() => {
   if (mode.value === "content") return markdownDirty.value;
   if (mode.value === "home") return homeDirty.value;
-  if (mode.value === "resume") return resumeConfigDirty.value;
+  if (mode.value === "resume") return resumeConfigDirty.value || Boolean(resumeAvatarFile.value);
   if (mode.value === "voice") return false;
   return selectedStyleKey.value !== publishedStyleKey.value;
 });
@@ -865,14 +1063,77 @@ onMounted(async () => {
   }
 });
 
+onBeforeUnmount(() => {
+  clearResumeAvatarLocalPreview();
+  stopHomeGenerationTimer();
+  if (recordedVoiceUrl.value) URL.revokeObjectURL(recordedVoiceUrl.value);
+});
+
 function setStatus(message, type = "info") {
   status.value = message;
   statusType.value = type;
 }
 
+function startHomeGeneration(state, action = "") {
+  stopHomeGenerationTimer();
+  homeGenerationState.value = state;
+  homeGenerationAction.value = action;
+  homeGenerationStartedAt.value = Date.now();
+  homeGenerationFinishedAt.value = 0;
+  homeGenerationElapsedMs.value = 0;
+  homeGenerationError.value = "";
+  homeGenerationTimer = window.setInterval(() => {
+    if (homeGenerationStartedAt.value) {
+      homeGenerationElapsedMs.value = Date.now() - homeGenerationStartedAt.value;
+    }
+  }, 250);
+}
+
+function finishHomeGeneration(state, payload = {}) {
+  if (homeGenerationStartedAt.value) {
+    homeGenerationFinishedAt.value = Date.now();
+    homeGenerationElapsedMs.value = homeGenerationFinishedAt.value - homeGenerationStartedAt.value;
+  }
+  stopHomeGenerationTimer();
+  homeGenerationState.value = state;
+  homeGenerationError.value = payload.error || "";
+  if (payload.meta || payload.briefing || payload.response) {
+    rememberHomeGenerationMeta(payload);
+  }
+}
+
+function stopHomeGenerationTimer() {
+  if (homeGenerationTimer) {
+    window.clearInterval(homeGenerationTimer);
+    homeGenerationTimer = null;
+  }
+}
+
+function rememberHomeGenerationMeta(payload = {}) {
+  const briefing = payload.briefing || payload;
+  const response = payload.response || {};
+  const meta = payload.meta || briefing?.generationMeta || {};
+  homeGenerationMeta.value = {
+    ...meta,
+    provider: meta.provider || response.aiProvider || briefing?.aiProvider || "",
+    model: meta.model || response.aiModel || "",
+    status: meta.status || homeGenerationState.value,
+    generated: Boolean(meta.generated ?? briefing?.generated),
+    durationMs: homeGenerationElapsedMs.value || Number(meta.durationMs || 0),
+  };
+}
+
+function isLlmGeneratedBriefing(briefing) {
+  return Boolean(briefing?.aiConfigured && briefing?.generated);
+}
+
+function homeBriefingFallbackMessage(briefing) {
+  return briefing?.generationMeta?.error || "模型未配置、调用失败或未返回可用首页结构，已基于当前 Markdown 生成本地首页草稿。";
+}
+
 function formatSaveError(error, target = "保存") {
-  if (showcaseMode.value) {
-    return `${target}失败：当前为展示项目模式，可体验生成和预览，但不会保存到首页或写入线上内容。`;
+  if (showcaseMode.value && !adminMode.value) {
+    return `${target}失败：当前为展示项目模式，可体验生成和预览；请切换到管理员模式并输入管理密码后再保存。`;
   }
   return `${target}失败：${error.message}`;
 }
@@ -894,6 +1155,8 @@ async function enterShowcase() {
     clearStoredAdminPassword();
     authenticated.value = true;
     showcaseMode.value = Boolean(result.showcaseMode);
+    adminMode.value = Boolean(result.adminMode);
+    showAdminSwitch.value = false;
     await Promise.all([loadMarkdown(), loadHomeBriefing(), loadSiteStyle(), loadResumeConfig(), loadResumeAvatar(), loadVoiceReference()]);
     setStatus(result.message || showcaseNotice, "warning");
   } catch (error) {
@@ -915,8 +1178,10 @@ async function login() {
     setStoredAdminPassword(password.value);
     authenticated.value = true;
     showcaseMode.value = Boolean(result.showcaseMode);
+    adminMode.value = Boolean(result.adminMode || !result.showcaseMode);
+    showAdminSwitch.value = false;
     await Promise.all([loadMarkdown(), loadHomeBriefing(), loadSiteStyle(), loadResumeConfig(), loadResumeAvatar(), loadVoiceReference()]);
-    setStatus(result.message, result.showcaseMode ? "warning" : "success");
+    setStatus(result.message, adminMode.value ? "success" : "warning");
   } catch (error) {
     clearStoredAdminPassword();
     authenticated.value = false;
@@ -926,9 +1191,43 @@ async function login() {
   }
 }
 
+async function switchToAdminMode() {
+  const nextPassword = adminPasswordInput.value.trim();
+  if (!nextPassword) {
+    setStatus("请输入管理密码。", "warning");
+    return;
+  }
+  adminModeLoading.value = true;
+  try {
+    const result = await adminLogin(nextPassword);
+    if (!result.adminMode) {
+      setStatus("管理密码不正确，仍处于体验模式。", "error");
+      return;
+    }
+    setStoredAdminPassword(nextPassword);
+    password.value = nextPassword;
+    adminPasswordInput.value = "";
+    adminMode.value = true;
+    authenticated.value = true;
+    showcaseMode.value = Boolean(result.showcaseMode);
+    showAdminSwitch.value = false;
+    await Promise.all([loadMarkdown(), loadHomeBriefing(), loadSiteStyle(), loadResumeConfig(), loadResumeAvatar(), loadVoiceReference()]);
+    setStatus(result.message || "已切换到管理员模式。", "success");
+  } catch (error) {
+    clearStoredAdminPassword();
+    adminMode.value = false;
+    setStatus(`切换管理员模式失败：${error.message}`, "error");
+  } finally {
+    adminModeLoading.value = false;
+  }
+}
+
 function logout() {
   clearStoredAdminPassword();
   password.value = "";
+  adminPasswordInput.value = "";
+  adminMode.value = false;
+  showAdminSwitch.value = false;
   authenticated.value = false;
   markdown.value = "";
   documentPath.value = "";
@@ -938,6 +1237,7 @@ function logout() {
   resumeConfigDirty.value = false;
   markdownDirty.value = false;
   homeDirty.value = false;
+  clearResumeAvatarLocalPreview();
   clearThemePreview();
   if (recordedVoiceUrl.value) URL.revokeObjectURL(recordedVoiceUrl.value);
   setStatus("");
@@ -965,7 +1265,7 @@ async function saveMarkdown() {
     sectionCount.value = result.sections;
     markdownDirty.value = false;
     await loadHomeBriefing();
-    setStatus(result.message, "success");
+    setStatus(`${result.message} 如需更新公开首页，请切到“首页编排”并点击“基于当前 Markdown 重新生成首页”。`, "success");
   } catch (error) {
     setStatus(formatSaveError(error, "Markdown 保存"), "error");
   } finally {
@@ -1021,12 +1321,16 @@ async function runMarkdownEdit() {
 
 async function loadHomeBriefing() {
   homeLoading.value = true;
+  startHomeGeneration("loading", "load");
   try {
     const result = await getHomeBriefingDraft(adminPassword.value);
     homeBriefing.value = result.briefing;
     homeSaved.value = result.saved;
     homeDirty.value = false;
+    rememberHomeGenerationMeta({ response: result, briefing: result.briefing });
+    finishHomeGeneration("idle", { response: result, briefing: result.briefing });
   } catch (error) {
+    finishHomeGeneration("failed", { error: `首页编排加载失败：${error.message}` });
     setStatus(`首页编排加载失败：${error.message}`, "error");
   } finally {
     homeLoading.value = false;
@@ -1037,29 +1341,68 @@ async function runHomeEdit() {
   const content = homeInstruction.value.trim();
   if (!content || !homeBriefing.value) return;
   homeAiLoading.value = true;
+  startHomeGeneration("editing", "edit");
+  setStatus("正在按说明调用模型微调首页草稿。", "info");
   try {
     const result = await aiEditHomeBriefing(adminPassword.value, homeBriefing.value, content);
     homeBriefing.value = result.briefing;
     homeSaved.value = result.saved;
     homeDirty.value = true;
-    setStatus(result.aiConfigured ? "已生成首页编排草稿。" : "后端未配置 DeepSeek API Key。", result.aiConfigured ? "success" : "warning");
+    finishHomeGeneration("idle", { response: result, briefing: result.briefing });
+    const llmGenerated = isLlmGeneratedBriefing(result.briefing);
+    setStatus(
+      llmGenerated
+        ? `已通过 ${result.aiProvider || "LLM"} 生成首页编排草稿。`
+        : homeBriefingFallbackMessage(result.briefing),
+      llmGenerated ? "success" : "warning",
+    );
   } catch (error) {
+    finishHomeGeneration("failed", { error: `首页编排失败：${error.message}` });
     setStatus(`首页编排失败：${error.message}`, "error");
   } finally {
     homeAiLoading.value = false;
   }
 }
 
+async function regenerateHomeFromMarkdown() {
+  if (!markdown.value.trim()) return;
+  homeRegenerating.value = true;
+  startHomeGeneration("regenerating", "regenerate");
+  setStatus("正在基于当前 Markdown 重新生成首页草稿，请稍候。", "info");
+  try {
+    const result = await previewMarkdownBriefing(adminPassword.value, markdown.value);
+    homeBriefing.value = result;
+    homeSaved.value = false;
+    homeDirty.value = true;
+    finishHomeGeneration("idle", { briefing: result });
+    const llmGenerated = isLlmGeneratedBriefing(result);
+    setStatus(
+      llmGenerated
+        ? `已通过 ${result.aiProvider || "LLM"} 基于当前 Markdown 重新生成首页草稿。`
+        : homeBriefingFallbackMessage(result),
+      llmGenerated ? "success" : "warning",
+    );
+  } catch (error) {
+    finishHomeGeneration("failed", { error: `首页重新生成失败：${error.message}` });
+    setStatus(`首页重新生成失败：${error.message}`, "error");
+  } finally {
+    homeRegenerating.value = false;
+  }
+}
+
 async function saveHomeDraft() {
   if (!homeBriefing.value) return;
   homeSaving.value = true;
+  startHomeGeneration("saving", "save");
   try {
     const result = await saveHomeBriefing(adminPassword.value, homeBriefing.value);
     homeBriefing.value = result.briefing;
     homeSaved.value = result.saved;
     homeDirty.value = false;
+    finishHomeGeneration("idle", { response: result, briefing: result.briefing });
     setStatus("首页编排已保存，公开首页将使用该版本。", "success");
   } catch (error) {
+    finishHomeGeneration("failed", { error: formatSaveError(error, "首页保存") });
     setStatus(formatSaveError(error, "首页保存"), "error");
   } finally {
     homeSaving.value = false;
@@ -1108,7 +1451,7 @@ async function loadResumeConfig() {
   try {
     resumeConfig.value = await getAdminResumeExportConfig(adminPassword.value);
     if (!resumeConfig.value.branding) {
-      resumeConfig.value.branding = { enabled: true, githubUrl: "", author: "王涛", text: "本简历由开源项目 AI Profile Page 生成" };
+      resumeConfig.value.branding = { enabled: true, githubUrl: "https://github.com/wuhuaha/resume-html", author: "王涛", text: "本简历由开源项目 Resume HTML 生成" };
     }
     resumeConfigDirty.value = false;
   } catch (error) {
@@ -1155,17 +1498,31 @@ async function loadResumeAvatar() {
 
 function selectResumeAvatarFile(event) {
   const selected = event.target.files?.[0] || null;
+  clearResumeAvatarLocalPreview();
   resumeAvatarFile.value = selected;
   resumeAvatarFileName.value = selected?.name || "";
+  if (selected) {
+    try {
+      validateResumeAvatarFile(selected);
+      resumeAvatarLocalPreview.value = URL.createObjectURL(selected);
+    } catch (error) {
+      resumeAvatarFile.value = null;
+      resumeAvatarFileName.value = "";
+      setStatus(error.message, "error");
+    }
+  }
+  event.target.value = "";
 }
 
 async function saveResumeAvatarFile() {
   if (!resumeAvatarFile.value) return;
   resumeAvatarSaving.value = true;
   try {
+    validateResumeAvatarFile(resumeAvatarFile.value);
     resumeAvatar.value = await saveResumeAvatar(adminPassword.value, resumeAvatarFile.value, resumeAvatarFile.value.name || "resume-avatar.png");
     resumeAvatarFile.value = null;
     resumeAvatarFileName.value = "";
+    clearResumeAvatarLocalPreview();
     setStatus("简历头像已保存，支持头像的模板导出时会使用。", "success");
   } catch (error) {
     setStatus(formatSaveError(error, "头像保存"), "error");
@@ -1176,10 +1533,29 @@ async function saveResumeAvatarFile() {
 
 async function clearResumeAvatar() {
   try {
+    resumeAvatarFile.value = null;
+    resumeAvatarFileName.value = "";
+    clearResumeAvatarLocalPreview();
     resumeAvatar.value = await deleteResumeAvatar(adminPassword.value);
     setStatus("简历头像已删除。", "success");
   } catch (error) {
     setStatus(formatSaveError(error, "头像删除"), "error");
+  }
+}
+
+function validateResumeAvatarFile(file) {
+  if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) {
+    throw new Error("简历头像只支持 JPG、PNG 或 WebP。");
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    throw new Error("头像文件不能超过 2 MB。");
+  }
+}
+
+function clearResumeAvatarLocalPreview() {
+  if (resumeAvatarLocalPreview.value) {
+    URL.revokeObjectURL(resumeAvatarLocalPreview.value);
+    resumeAvatarLocalPreview.value = "";
   }
 }
 
@@ -1230,7 +1606,7 @@ async function saveRecordedVoiceReference() {
 async function saveVoiceReferenceBlob(blob, filename) {
   const normalized = blob.type.includes("wav") ? blob : await convertBlobToWav(blob);
   validateVoiceReferenceBlob(normalized);
-  if (showcaseMode.value) {
+  if (showcaseMode.value && !adminMode.value) {
     const dataUrl = await blobToDataUrl(normalized);
     localStorage.setItem("ai-profile-voice-clone-reference", dataUrl);
     localStorage.setItem("ai-profile-voice-clone-reference-name", filename);
@@ -1253,7 +1629,7 @@ async function clearVoiceReference() {
     localVoiceReference.value = "";
     localVoiceReferenceName.value = "";
     localVoiceReferenceSize.value = 0;
-    if (!showcaseMode.value) {
+    if (!showcaseMode.value || adminMode.value) {
       voiceReference.value = await deleteVoiceCloneReference(adminPassword.value);
     }
     setStatus("已恢复默认音色。", "success");

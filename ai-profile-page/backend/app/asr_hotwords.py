@@ -144,8 +144,7 @@ async def extract_hotwords_with_llm(profile: dict[str, Any], local_words: list[s
         [
             {"role": "system", "content": "你只输出 JSON 字符串数组。"},
             {"role": "user", "content": prompt},
-        ],
-        settings.deepseek_chat_model,
+        ]
     )
     parsed = parse_json_array(raw)
     return [str(item) for item in parsed if isinstance(item, str)]
@@ -167,8 +166,7 @@ async def correct_asr_transcript_with_llm(text: str, hotwords: list[str]) -> str
         [
             {"role": "system", "content": "只做 ASR 术语纠错，输出纯文本。"},
             {"role": "user", "content": prompt},
-        ],
-        settings.deepseek_chat_model,
+        ]
     )
     return corrected.strip().strip("`")
 

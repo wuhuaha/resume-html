@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,15 +13,18 @@ from .briefing import (
     adjust_briefing_with_ai,
     clear_briefing_cache,
     generate_briefing,
+    generation_meta,
     local_briefing,
     merge_briefing,
+    profile_source_hash,
     read_briefing_override,
+    summarize_llm_error,
     write_briefing_override,
 )
 from .config import settings
 from .content import knowledge_context, load_profile, parse_profile_markdown, read_markdown, write_markdown
 from .deepseek import deepseek_client
-from .exporter import compact_resume_markdown, ensure_resume_header_metadata, local_match_resume, markdown_to_resume_html
+from .exporter import compact_resume_markdown, ensure_resume_header_metadata, local_match_resume, markdown_to_resume_html, meta_value
 from .importer import upload_to_markdown
 from .resume_assets import delete_resume_avatar, read_resume_avatar, resume_avatar_data_url, save_resume_avatar
 from .resume_config import active_resume_mode, active_resume_template, read_resume_export_config, write_resume_export_config
@@ -87,18 +91,25 @@ def profile_data() -> dict:
     return load_profile(settings.resolved_content_path)
 
 
-def verify_admin_password(x_admin_password: str = Header(default="")) -> None:
+def has_valid_admin_password(password: str) -> bool:
+    return bool(password) and secrets.compare_digest(password, settings.admin_password)
+
+
+def verify_admin_password(x_admin_password: str = Header(default="")) -> str:
     if settings.showcase_mode:
+        if has_valid_admin_password(x_admin_password):
+            return x_admin_password
         return
-    if not secrets.compare_digest(x_admin_password, settings.admin_password):
+    if not has_valid_admin_password(x_admin_password):
         raise HTTPException(status_code=401, detail="管理密码不正确。")
+    return x_admin_password
 
 
-def require_persistence_enabled() -> None:
-    if settings.showcase_mode:
+def require_persistence_enabled(admin_password: str = "") -> None:
+    if settings.showcase_mode and not has_valid_admin_password(admin_password):
         raise HTTPException(
             status_code=403,
-            detail="当前为展示项目模式：后台免验证，可体验生成与预览，但不会保存到首页或写入线上内容。",
+            detail="当前为展示项目模式：免验证只能体验生成与预览。请切换到管理员模式并输入管理密码后再保存。",
         )
 
 
@@ -142,12 +153,17 @@ async def chat(request: ChatRequest) -> ChatResponse:
     messages = build_chat_messages(profile, context, request)
 
     if deepseek_client.configured:
-        answer = await deepseek_client.chat(messages, settings.deepseek_chat_model)
-        answer = normalize_chat_answer_perspective(answer, profile)
-        return ChatResponse(answer=answer, sources=sources, configured=True)
+        try:
+            answer = await deepseek_client.chat(messages)
+            answer = normalize_chat_answer_perspective(answer, profile)
+            return ChatResponse(answer=answer, sources=sources, configured=True, provider=deepseek_client.last_provider_label)
+        except Exception as exc:  # noqa: BLE001
+            fallback = local_answer(request.question, profile)
+            answer = f"{fallback}\n\n提示：{summarize_llm_error(exc)}"
+            return ChatResponse(answer=answer, sources=sources, configured=False, provider=deepseek_client.provider_label)
 
     fallback = local_answer(request.question, profile)
-    return ChatResponse(answer=fallback, sources=sources, configured=False)
+    return ChatResponse(answer=fallback, sources=sources, configured=False, provider=deepseek_client.provider_label)
 
 
 def build_chat_messages(profile: dict, context: str, request: ChatRequest) -> list[dict[str, str]]:
@@ -305,7 +321,8 @@ async def export_resume(request: ExportRequest) -> ExportResponse:
     template = active_resume_template(export_config, request.template)
     base_markdown = local_match_resume(profile, request.jd, request.direction, mode)
     configured = deepseek_client.configured
-    note = f"未配置 DeepSeek API Key，已按“{mode['label']} / {template['label']}”生成本地保守匹配版本。"
+    metadata_note = resume_metadata_note(profile, mode)
+    note = f"未配置 LLM API Key，已按“{mode['label']} / {template['label']}”生成本地保守匹配版本。{metadata_note}"
 
     if configured and request.jd.strip():
         system_prompt = (
@@ -317,7 +334,7 @@ async def export_resume(request: ExportRequest) -> ExportResponse:
             "所有内容要适合招聘方阅读，优先保留与 JD 高相关的量化成果和技术证据。"
         )
         context = knowledge_context(profile)
-        birth = profile["meta"].get("birth") or profile["meta"].get("birthday") or "资料未写明"
+        birth = meta_value(profile["meta"], "birth") or "资料未写明"
         prompt = (
             f"候选人资料：\n{context}\n\n"
             f"岗位 JD：\n{request.jd}\n\n"
@@ -326,20 +343,25 @@ async def export_resume(request: ExportRequest) -> ExportResponse:
             f"核心能力最多 {mode['skillCount']} 条；每段经历最多 {mode['experienceBullets']} 条；"
             f"项目最多 {mode['projectCount']} 个，每项目最多 {mode['projectBullets']} 条。\n"
             f"模板策略：{template['label']}；{template.get('llmInstruction', '')}\n"
-            f"必须保留的基础信息：姓名={profile['meta'].get('name', '')}；电话={profile['meta'].get('phone', '')}；"
-            f"邮箱={profile['meta'].get('email', '')}；所在地={profile['meta'].get('location', '')}；"
-            f"学历={profile['meta'].get('education', '')}；出生日期={birth}。\n"
+            f"必须保留的基础信息：姓名={profile['meta'].get('name', '')}；电话={meta_value(profile['meta'], 'phone')}；"
+            f"邮箱={meta_value(profile['meta'], 'email')}；所在地={meta_value(profile['meta'], 'location')}；"
+            f"学历={meta_value(profile['meta'], 'education')}；出生日期={birth}；"
+            f"出生日期导出开关={'开启' if mode.get('includeBirth', True) else '关闭'}。\n"
             f"基础简历草稿：\n{base_markdown}"
         )
-        base_markdown = await deepseek_client.chat(
-            [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
-            settings.deepseek_export_model,
-        )
-        base_markdown = compact_resume_markdown(base_markdown, mode)
-        note = f"已基于 DeepSeek 和资料约束生成匹配简历，并按“{mode['label']} / {template['label']}”策略控制篇幅与版式。"
+        try:
+            base_markdown = await deepseek_client.chat(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+                purpose="export",
+            )
+            base_markdown = compact_resume_markdown(base_markdown, mode)
+            note = f"已基于 {deepseek_client.last_provider_label} 和资料约束生成匹配简历，并按“{mode['label']} / {template['label']}”策略控制篇幅与版式。{metadata_note}"
+        except Exception as exc:  # noqa: BLE001
+            configured = False
+            note = f"{summarize_llm_error(exc)} 已按“{mode['label']} / {template['label']}”生成本地保守匹配版本。{metadata_note}"
 
     base_markdown = ensure_resume_header_metadata(base_markdown, profile, mode)
     avatar_data = resume_avatar_data_url() if mode.get("includeAvatar") and template.get("showAvatar") else ""
@@ -356,6 +378,7 @@ async def export_resume(request: ExportRequest) -> ExportResponse:
         filename=f"wangtao-{template['key']}-{mode['key']}.html",
         configured=configured,
         note=note,
+        provider=deepseek_client.last_provider_label if configured else deepseek_client.provider_label,
     )
 
 
@@ -368,21 +391,29 @@ async def export_resume_html(request: ExportRequest) -> str:
 @app.post("/api/admin/login", response_model=AdminLoginResponse)
 async def admin_login(request: AdminLoginRequest) -> AdminLoginResponse:
     if settings.showcase_mode:
+        if has_valid_admin_password(request.password):
+            return AdminLoginResponse(
+                ok=True,
+                message="已切换到管理员模式：当前保存会真实写入线上内容。",
+                showcaseMode=True,
+                adminMode=True,
+            )
         return AdminLoginResponse(
             ok=True,
-            message="当前为展示项目模式：已免验证进入后台，可体验生成与预览，但保存会被拦截。",
+            message="当前为展示项目模式：已免验证进入后台，可体验生成与预览；如需保存，请切换到管理员模式并输入管理密码。",
             showcaseMode=True,
+            adminMode=False,
         )
     if not secrets.compare_digest(request.password, settings.admin_password):
         raise HTTPException(status_code=401, detail="管理密码不正确。")
-    return AdminLoginResponse(ok=True, message="已进入作者后台。", showcaseMode=False)
+    return AdminLoginResponse(ok=True, message="已进入作者后台。", showcaseMode=False, adminMode=True)
 
 
 @app.get("/api/admin/mode", response_model=AdminModeResponse)
 async def get_admin_mode() -> AdminModeResponse:
     message = ""
     if settings.showcase_mode:
-        message = "当前为展示项目模式：后台免验证，可体验生成与预览，但保存会被拦截。"
+        message = "当前为展示项目模式：后台免验证，可体验生成与预览；输入管理密码后可切换到管理员模式进行保存。"
     return AdminModeResponse(showcaseMode=settings.showcase_mode, message=message)
 
 
@@ -400,9 +431,9 @@ async def get_markdown(_: None = Depends(verify_admin_password)) -> MarkdownDocu
 @app.put("/api/admin/markdown", response_model=ReindexResponse)
 async def save_markdown(
     request: MarkdownSaveRequest,
-    _: None = Depends(verify_admin_password),
+    admin_password: str = Depends(verify_admin_password),
 ) -> ReindexResponse:
-    require_persistence_enabled()
+    require_persistence_enabled(admin_password)
     write_markdown(settings.resolved_content_path, request.markdown)
     clear_briefing_cache()
     profile = profile_data()
@@ -417,8 +448,9 @@ async def ai_edit_markdown(
     if not deepseek_client.configured:
         return AdminAiEditResponse(
             markdown=request.markdown,
-            note="后端未配置 DeepSeek API Key，无法执行 AI 修改。",
+            note="后端未配置 LLM API Key，无法执行 AI 修改。",
             configured=False,
+            provider=deepseek_client.provider_label,
         )
 
     system_prompt = (
@@ -429,17 +461,25 @@ async def ai_edit_markdown(
         "只输出完整 Markdown，不要解释，不要代码围栏。"
     )
     prompt = f"修改指令：\n{request.instruction}\n\n当前 Markdown：\n{request.markdown}"
-    edited = await deepseek_client.chat(
-        [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ],
-        settings.deepseek_chat_model,
-    )
+    try:
+        edited = await deepseek_client.chat(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ]
+        )
+    except Exception as exc:  # noqa: BLE001
+        return AdminAiEditResponse(
+            markdown=request.markdown,
+            note=f"{summarize_llm_error(exc)} 已保留当前 Markdown，未应用 AI 修改。",
+            configured=False,
+            provider=deepseek_client.provider_label,
+        )
     return AdminAiEditResponse(
         markdown=strip_markdown_fence(edited),
-        note="已生成 Markdown 草稿。请预览确认后再保存。",
+        note=f"已通过 {deepseek_client.last_provider_label} 生成 Markdown 草稿。请预览确认后再保存。",
         configured=True,
+        provider=deepseek_client.last_provider_label,
     )
 
 
@@ -449,7 +489,7 @@ async def preview_briefing(
     _: None = Depends(verify_admin_password),
 ) -> BriefingResponse:
     profile = parse_profile_markdown(request.markdown)
-    briefing = await generate_briefing(profile)
+    briefing = await generate_briefing(profile, use_override=False)
     return BriefingResponse(**briefing)
 
 
@@ -462,6 +502,8 @@ async def get_home_briefing(_: None = Depends(verify_admin_password)) -> AdminHo
         briefing=briefing,
         saved=saved is not None,
         aiConfigured=deepseek_client.configured,
+        aiProvider=deepseek_client.provider_label,
+        aiModel=briefing.get("generationMeta", {}).get("model") or deepseek_client.model_for("chat"),
     )
 
 
@@ -476,18 +518,26 @@ async def ai_edit_home_briefing(
             briefing=request.briefing,
             saved=False,
             aiConfigured=False,
+            aiProvider=deepseek_client.provider_label,
+            aiModel=deepseek_client.model_for("chat"),
         )
 
     briefing = await adjust_briefing_with_ai(profile, request.briefing, request.instruction)
-    return AdminHomeBriefingResponse(briefing=briefing, saved=False, aiConfigured=True)
+    return AdminHomeBriefingResponse(
+        briefing=briefing,
+        saved=False,
+        aiConfigured=True,
+        aiProvider=deepseek_client.last_provider_label,
+        aiModel=deepseek_client.last_model or deepseek_client.model_for("chat"),
+    )
 
 
 @app.put("/api/admin/home-briefing", response_model=AdminHomeBriefingResponse)
 async def save_home_briefing(
     request: AdminHomeBriefingSaveRequest,
-    _: None = Depends(verify_admin_password),
+    admin_password: str = Depends(verify_admin_password),
 ) -> AdminHomeBriefingResponse:
-    require_persistence_enabled()
+    require_persistence_enabled(admin_password)
     profile = profile_data()
     normalized = await normalize_home_briefing(profile, request.briefing)
     write_briefing_override(settings.resolved_home_briefing_path, normalized)
@@ -496,6 +546,8 @@ async def save_home_briefing(
         briefing=normalized,
         saved=True,
         aiConfigured=deepseek_client.configured,
+        aiProvider=deepseek_client.provider_label,
+        aiModel=normalized.get("generationMeta", {}).get("model") or deepseek_client.model_for("chat"),
     )
 
 
@@ -507,9 +559,9 @@ async def get_admin_site_style(_: None = Depends(verify_admin_password)) -> Site
 @app.put("/api/admin/site-style", response_model=SiteStyleResponse)
 async def save_admin_site_style(
     request: SiteStyleSaveRequest,
-    _: None = Depends(verify_admin_password),
+    admin_password: str = Depends(verify_admin_password),
 ) -> SiteStyleResponse:
-    require_persistence_enabled()
+    require_persistence_enabled(admin_password)
     write_site_style(settings.resolved_site_style_path, {"activeKey": request.activeKey})
     return SiteStyleResponse(**site_style_response(settings.resolved_site_style_path))
 
@@ -523,9 +575,9 @@ async def get_admin_resume_export_config(_: None = Depends(verify_admin_password
 @app.put("/api/admin/resume-export-config", response_model=ResumeExportConfigResponse)
 async def save_admin_resume_export_config(
     request: ResumeExportConfigSaveRequest,
-    _: None = Depends(verify_admin_password),
+    admin_password: str = Depends(verify_admin_password),
 ) -> ResumeExportConfigResponse:
-    require_persistence_enabled()
+    require_persistence_enabled(admin_password)
     config = write_resume_export_config(settings.resolved_resume_export_config_path, request.model_dump())
     return ResumeExportConfigResponse(**config)
 
@@ -538,9 +590,9 @@ async def get_admin_resume_avatar(_: None = Depends(verify_admin_password)) -> R
 @app.put("/api/admin/resume-avatar", response_model=ResumeAvatarResponse)
 async def save_admin_resume_avatar(
     file: UploadFile = File(...),
-    _: None = Depends(verify_admin_password),
+    admin_password: str = Depends(verify_admin_password),
 ) -> ResumeAvatarResponse:
-    require_persistence_enabled()
+    require_persistence_enabled(admin_password)
     try:
         image = await file.read()
         result = save_resume_avatar(image, file.content_type or "", file.filename or "")
@@ -550,8 +602,8 @@ async def save_admin_resume_avatar(
 
 
 @app.delete("/api/admin/resume-avatar", response_model=ResumeAvatarResponse)
-async def delete_admin_resume_avatar(_: None = Depends(verify_admin_password)) -> ResumeAvatarResponse:
-    require_persistence_enabled()
+async def delete_admin_resume_avatar(admin_password: str = Depends(verify_admin_password)) -> ResumeAvatarResponse:
+    require_persistence_enabled(admin_password)
     return ResumeAvatarResponse(**delete_resume_avatar())
 
 
@@ -563,9 +615,9 @@ async def get_admin_voice_clone_reference(_: None = Depends(verify_admin_passwor
 @app.put("/api/admin/voice-clone/reference", response_model=VoiceCloneReferenceResponse)
 async def save_admin_voice_clone_reference(
     file: UploadFile = File(...),
-    _: None = Depends(verify_admin_password),
+    admin_password: str = Depends(verify_admin_password),
 ) -> VoiceCloneReferenceResponse:
-    require_persistence_enabled()
+    require_persistence_enabled(admin_password)
     try:
         audio = await file.read()
         result = save_voice_clone_reference(audio, file.content_type or "", file.filename or "")
@@ -575,8 +627,8 @@ async def save_admin_voice_clone_reference(
 
 
 @app.delete("/api/admin/voice-clone/reference", response_model=VoiceCloneReferenceResponse)
-async def delete_admin_voice_clone_reference(_: None = Depends(verify_admin_password)) -> VoiceCloneReferenceResponse:
-    require_persistence_enabled()
+async def delete_admin_voice_clone_reference(admin_password: str = Depends(verify_admin_password)) -> VoiceCloneReferenceResponse:
+    require_persistence_enabled(admin_password)
     return VoiceCloneReferenceResponse(**delete_voice_clone_reference())
 
 
@@ -617,6 +669,21 @@ async def normalize_home_briefing(profile: dict, briefing: dict) -> dict:
     normalized = merge_briefing(local_briefing(profile), briefing)
     normalized["generated"] = bool(briefing.get("generated", True))
     normalized["aiConfigured"] = deepseek_client.configured
+    normalized["aiProvider"] = briefing.get("aiProvider") or deepseek_client.provider_label
+    source_hash = profile_source_hash(profile)
+    meta = briefing.get("generationMeta") or generation_meta(
+        status="saved",
+        generated=normalized["generated"],
+        provider=normalized["aiProvider"],
+        model=deepseek_client.model_for("chat"),
+        source_hash=source_hash,
+    )
+    meta["status"] = "saved"
+    meta["cached"] = False
+    meta["savedAt"] = datetime.now(timezone.utc).isoformat()
+    meta["sourceHash"] = source_hash
+    normalized["generationMeta"] = meta
+    normalized["sourceHash"] = source_hash
     return normalized
 
 
@@ -644,7 +711,7 @@ def local_answer(question: str, profile: dict) -> str:
     if any(token in q for token in ["语音", "ai", "agent", "llm", "智能"]):
         return (
             f"适合。{name}的主线集中在语音智能、AI Agent、ASR/TTS/KWS 和工程落地。"
-            "在欧瑞博的语音 Agent 项目里，资料记录了 P95 首 token 从 10s 降到 1s、"
+            "在欧瑞博的语音 Agent 项目里，资料记录了 P95 端到端首帧语音延迟从 10s 降到 1s、"
             "链路成本降低 95%、ASR/TTS 成本降低 60% 等结果。需要我展开技术难点吗？"
             "\n\n依据：工作经历 / 项目详情。"
         )
@@ -653,3 +720,11 @@ def local_answer(question: str, profile: dict) -> str:
         "这是基于本地资料的保守回答，可以继续追问某段经历或某个项目。"
         "\n\n依据：profile.md / 核心能力 / 项目详情。"
     )
+
+
+def resume_metadata_note(profile: dict, mode: dict) -> str:
+    if not mode.get("includeBirth", True):
+        return " 出生日期已按当前篇幅模式配置隐藏。"
+    if meta_value(profile.get("meta", {}), "birth"):
+        return " 已按资料保留出生日期。"
+    return " 资料中未写明出生日期，导出时不会猜测补充。"

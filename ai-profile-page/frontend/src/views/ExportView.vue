@@ -6,8 +6,22 @@
         <span>AI Profile</span>
       </a>
       <div class="nav-actions">
-        <a href="/">返回首页</a>
-        <ThemeSwitcher />
+        <div class="nav-links">
+          <a href="/">返回首页</a>
+        </div>
+        <div class="nav-tools">
+          <a
+            class="open-source-link"
+            href="https://github.com/wuhuaha/resume-html/blob/main/ai-profile-page/docs/DEPLOYMENT.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="查看 GitHub 开源项目部署说明"
+          >
+            <Github :size="16" />
+            <span>开源部署</span>
+          </a>
+          <ThemeSwitcher />
+        </div>
       </div>
     </nav>
 
@@ -100,7 +114,7 @@ const mode = ref("one-page");
 const exportConfig = ref(null);
 const resultHtml = ref("");
 const filename = ref("wangtao-resume.html");
-const note = ref("后端未配置 DeepSeek Key 时，会使用本地资料生成保守版本。");
+const note = ref("后端未配置 LLM Key 时，会使用本地资料生成保守版本。");
 const loading = ref(false);
 
 const templates = computed(() => {

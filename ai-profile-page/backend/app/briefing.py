@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from copy import deepcopy
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -21,10 +22,25 @@ def read_briefing_override(path: Path, profile: dict[str, Any]) -> dict[str, Any
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
+    current_source_hash = profile_source_hash(profile)
+    saved_source_hash = raw.get("sourceHash") or raw.get("generationMeta", {}).get("sourceHash")
+    if saved_source_hash and saved_source_hash != current_source_hash:
+        return None
+    if not saved_source_hash and is_legacy_briefing(raw, profile):
+        return None
     fallback = local_briefing(profile)
     merged = merge_briefing(fallback, raw)
     merged["generated"] = bool(raw.get("generated", True))
     merged["aiConfigured"] = deepseek_client.configured
+    merged["aiProvider"] = raw.get("aiProvider") or deepseek_client.provider_label
+    merged["generationMeta"] = raw.get("generationMeta") or generation_meta(
+        status="saved",
+        generated=merged["generated"],
+        provider=merged["aiProvider"],
+        model=raw.get("aiModel", ""),
+    )
+    merged["sourceHash"] = current_source_hash
+    merged["generationMeta"]["sourceHash"] = current_source_hash
     return merged
 
 
@@ -107,12 +123,12 @@ def local_briefing(profile: dict[str, Any]) -> dict[str, Any]:
             {
                 "label": "可验证结果",
                 "value": "延迟与成本优化",
-                "detail": "资料中包含首 token、模型链路和 ASR/TTS 成本优化结果。",
+                "detail": "资料中包含端到端首帧语音延迟、模型链路和 ASR/TTS 成本优化结果。",
             },
         ],
         "metrics": [
-            {"value": "10s→1s", "label": "P95 首 token", "note": "语音 Agent 首响应优化"},
-            {"value": "95%", "label": "语义链路成本降低", "note": "模型编排与规则协同"},
+            {"value": "10s→1s", "label": "P95 端到端首帧语音延迟", "note": "上下文裁剪、模型路由、流式响应、缓存和并行链路优化"},
+            {"value": "95%", "label": "Token 成本降低", "note": "模型分层路由、上下文治理与缓存协同"},
             {"value": "60%", "label": "ASR/TTS 成本降低", "note": "服务评测、替换与调优"},
         ],
         "capabilities": [
@@ -135,17 +151,27 @@ def local_briefing(profile: dict[str, Any]) -> dict[str, Any]:
         ],
         "generated": False,
         "aiConfigured": deepseek_client.configured,
+        "aiProvider": deepseek_client.provider_label,
+        "sourceHash": profile_source_hash(profile),
+        "generationMeta": generation_meta(status="local", generated=False, source_hash=profile_source_hash(profile)),
     }
 
 
-async def generate_briefing(profile: dict[str, Any]) -> dict[str, Any]:
-    override = read_briefing_override(settings.resolved_home_briefing_path, profile)
-    if override:
-        return deepcopy(override)
+async def generate_briefing(profile: dict[str, Any], *, use_override: bool = True) -> dict[str, Any]:
+    if use_override:
+        override = read_briefing_override(settings.resolved_home_briefing_path, profile)
+        if override:
+            return deepcopy(override)
 
     cache_key = briefing_cache_key(profile)
     if cache_key in _briefing_cache:
-        return deepcopy(_briefing_cache[cache_key])
+        cached = deepcopy(_briefing_cache[cache_key])
+        cached["generationMeta"] = {
+            **cached.get("generationMeta", generation_meta(status="cached", generated=cached.get("generated", False))),
+            "status": "cached",
+            "cached": True,
+        }
+        return cached
 
     fallback = local_briefing(profile)
     if not deepseek_client.configured:
@@ -163,6 +189,7 @@ async def generate_briefing(profile: dict[str, Any]) -> dict[str, Any]:
 - assistant 是代替候选人回答访客的授权 AI 助手，访客通常是招聘方或面试官；对话说明不要写成面向候选人本人。
 - assistant 的 context 要说明“可简短回答经历、项目、岗位匹配”，不要承诺无依据内容。
 - suggestedQuestions 要适合招聘方连续追问，短问题为主。
+- 指标必须使用资料中的最新术语，例如“P95 端到端首帧语音延迟”“Token 成本降低”“ASR/TTS 成本降低”；不要改写成旧的“P95 首 token”。
 - 输出必须是 JSON，不要 Markdown，不要解释。
 - JSON schema:
 {{
@@ -210,16 +237,30 @@ async def generate_briefing(profile: dict[str, Any]) -> dict[str, Any]:
             [
                 {"role": "system", "content": f"你只输出合法 JSON。候选人姓名是 {fallback['meta'].get('name', fallback['hero']['headline'])}，不得使用任何其他人名。"},
                 {"role": "user", "content": prompt},
-            ],
-            settings.deepseek_chat_model,
+            ]
         )
         parsed = parse_json_object(raw)
         merged = merge_briefing(fallback, parsed)
         merged["generated"] = True
         merged["aiConfigured"] = True
+        merged["aiProvider"] = deepseek_client.last_provider_label
+        merged["generationMeta"] = generation_meta(
+            status="generated",
+            generated=True,
+            provider=deepseek_client.last_provider_label,
+            model=deepseek_client.last_model,
+            source_hash=profile_source_hash(profile),
+        )
+        merged["sourceHash"] = profile_source_hash(profile)
         _briefing_cache[cache_key] = merged
         return deepcopy(merged)
-    except Exception:
+    except Exception as exc:
+        fallback["generationMeta"] = generation_meta(
+            status="fallback",
+            generated=False,
+            source_hash=profile_source_hash(profile),
+            error=summarize_llm_error(exc),
+        )
         _briefing_cache[cache_key] = fallback
         return deepcopy(fallback)
 
@@ -242,6 +283,7 @@ async def adjust_briefing_with_ai(
 - headline 必须保持为候选人姓名。
 - assistant 是代替候选人回答访客的授权 AI 助手，访客通常是招聘方或面试官。
 - assistant 文案要支持多轮短问短答，不要写成面向候选人本人。
+- 指标必须跟随候选人 Markdown 的当前表述，例如“P95 端到端首帧语音延迟”“Token 成本降低”“ASR/TTS 成本降低”；不要沿用旧首页 JSON 里的“P95 首 token”。
 - 输出必须是完整 JSON，不要 Markdown，不要解释。
 
 修改指令：
@@ -253,23 +295,97 @@ async def adjust_briefing_with_ai(
 当前首页 JSON：
 {json.dumps(current_briefing, ensure_ascii=False)}
 """
-    raw = await deepseek_client.chat(
-        [
-            {"role": "system", "content": "你只输出合法 JSON，且不得编造事实。"},
-            {"role": "user", "content": prompt},
-        ],
-        settings.deepseek_chat_model,
-    )
-    parsed = parse_json_object(raw)
-    merged = merge_briefing(fallback, parsed)
-    merged["generated"] = True
-    merged["aiConfigured"] = True
-    polish_generated_copy(merged, fallback)
-    return merged
+    try:
+        raw = await deepseek_client.chat(
+            [
+                {"role": "system", "content": "你只输出合法 JSON，且不得编造事实。"},
+                {"role": "user", "content": prompt},
+            ]
+        )
+        parsed = parse_json_object(raw)
+        merged = merge_briefing(fallback, parsed)
+        merged["generated"] = True
+        merged["aiConfigured"] = True
+        merged["aiProvider"] = deepseek_client.last_provider_label
+        merged["generationMeta"] = generation_meta(
+            status="generated",
+            generated=True,
+            provider=deepseek_client.last_provider_label,
+            model=deepseek_client.last_model,
+            source_hash=profile_source_hash(profile),
+        )
+        merged["sourceHash"] = profile_source_hash(profile)
+        polish_generated_copy(merged, fallback)
+        return merged
+    except Exception as exc:
+        merged = merge_briefing(fallback, current_briefing)
+        merged["generated"] = bool(current_briefing.get("generated", False))
+        merged["aiConfigured"] = True
+        merged["aiProvider"] = deepseek_client.provider_label
+        merged["generationMeta"] = generation_meta(
+            status="fallback",
+            generated=False,
+            provider=deepseek_client.provider_label,
+            model=deepseek_client.model_for("chat"),
+            source_hash=profile_source_hash(profile),
+            error=summarize_llm_error(exc),
+        )
+        merged["sourceHash"] = profile_source_hash(profile)
+        polish_generated_copy(merged, fallback)
+        return merged
 
 
 def clear_briefing_cache() -> None:
     _briefing_cache.clear()
+
+
+def generation_meta(
+    *,
+    status: str,
+    generated: bool,
+    provider: str = "",
+    model: str = "",
+    source_hash: str = "",
+    error: str = "",
+) -> dict[str, Any]:
+    return {
+        "status": status,
+        "generated": generated,
+        "provider": provider or deepseek_client.provider_label,
+        "model": model or deepseek_client.model_for("chat"),
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "cached": False,
+        "sourceHash": source_hash,
+        "error": error,
+    }
+
+
+def summarize_llm_error(exc: Exception) -> str:
+    name = type(exc).__name__
+    detail = str(exc).strip()
+    if name == "ReadTimeout":
+        return "模型接口响应超时，已回退为本地结果。"
+    if detail:
+        return f"{name}: {detail[:180]}"
+    return f"{name}: 模型调用失败，已回退为本地结果。"
+
+
+def summarize_generation_error(exc: Exception) -> str:
+    return summarize_llm_error(exc).replace("本地结果", "本地首页草稿")
+
+
+def profile_source_hash(profile: dict[str, Any]) -> str:
+    raw = profile.get("rawMarkdown", "")
+    return sha256(raw.encode("utf-8")).hexdigest()
+
+
+def is_legacy_briefing(raw: dict[str, Any], profile: dict[str, Any]) -> bool:
+    raw_text = json.dumps(raw, ensure_ascii=False)
+    source_text = profile.get("rawMarkdown", "")
+    legacy_terms = ["P95首token", "P95 首 token", "首token耗时", "讯飞NLP大赛", "讯飞 NLP 大赛"]
+    if any(term in raw_text for term in legacy_terms):
+        return True
+    return "P95 端到端首帧语音延迟" in source_text and "P95 端到端首帧语音延迟" not in raw_text
 
 
 def parse_json_object(text: str) -> dict[str, Any]:
@@ -340,8 +456,7 @@ def merge_briefing(fallback: dict[str, Any], generated: dict[str, Any]) -> dict[
 
 def briefing_cache_key(profile: dict[str, Any]) -> str:
     raw = profile.get("rawMarkdown", "")
-    configured = "deepseek" if deepseek_client.configured else "local"
-    payload = f"{configured}:{settings.deepseek_chat_model}:{raw}"
+    payload = f"{deepseek_client.active_provider}:{deepseek_client.chat_model}:{raw}"
     return sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -410,6 +525,7 @@ def clean_text(value: Any, fallback: Any = "", limit: int = 260) -> str:
 def polish_generated_copy(result: dict[str, Any], fallback: dict[str, Any]) -> None:
     name = fallback["meta"].get("name") or fallback["hero"]["headline"]
     replace_candidate_label(result, name)
+    normalize_current_metric_terms(result, fallback)
 
     assistant = result.get("page", {}).get("assistant", {})
     title = assistant.get("title", "")
@@ -484,6 +600,29 @@ def replace_wrong_person_refs(text: str, name: str) -> str:
     for wrong_name in {"郭佳"}:
         cleaned = cleaned.replace(wrong_name, name)
     return cleaned
+
+
+def normalize_current_metric_terms(result: dict[str, Any], fallback: dict[str, Any]) -> None:
+    source_text = json.dumps(fallback, ensure_ascii=False)
+    if "P95 端到端首帧语音延迟" not in source_text:
+        return
+
+    for item in result.get("metrics", []):
+        label = item.get("label", "")
+        note = item.get("note", "")
+        if "首token" in label or "首 token" in label:
+            item["label"] = "P95 端到端首帧语音延迟"
+            if not note or "首 token" in note or "首token" in note:
+                item["note"] = "上下文裁剪、模型路由、流式响应、缓存和并行链路优化"
+        if label in {"成本降低", "语义链路成本降低"}:
+            item["label"] = "Token 成本降低"
+            if not note or "架构重构" in note or "语义链路" in note:
+                item["note"] = "模型分层路由、上下文治理与缓存协同"
+
+    for item in result.get("fitSignals", []):
+        detail = item.get("detail", "")
+        detail = detail.replace("首 token", "端到端首帧语音延迟").replace("首token", "端到端首帧语音延迟")
+        item["detail"] = detail
 
 
 def summarize_body(body: str) -> str:

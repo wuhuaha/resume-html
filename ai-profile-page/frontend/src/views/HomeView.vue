@@ -6,12 +6,26 @@
         <span>AI Profile</span>
       </a>
       <div class="nav-actions">
-        <a href="#capabilities">{{ page.nav.capabilities }}</a>
-        <a href="#timeline">{{ page.nav.timeline }}</a>
-        <a href="#projects">{{ page.nav.projects }}</a>
-        <a href="/resume/export">{{ page.nav.export }}</a>
-        <a class="ghost-link" href="/admin">{{ page.nav.admin }}</a>
-        <ThemeSwitcher />
+        <div class="nav-links">
+          <a href="#capabilities">{{ page.nav.capabilities }}</a>
+          <a href="#timeline">{{ page.nav.timeline }}</a>
+          <a href="#projects">{{ page.nav.projects }}</a>
+          <a href="/resume/export">{{ page.nav.export }}</a>
+        </div>
+        <div class="nav-tools">
+          <a class="ghost-link" href="/admin">{{ page.nav.admin }}</a>
+          <a
+            class="open-source-link"
+            href="https://github.com/wuhuaha/resume-html/blob/main/ai-profile-page/docs/DEPLOYMENT.md"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="查看 GitHub 开源项目部署说明"
+          >
+            <Github :size="16" />
+            <span>开源部署</span>
+          </a>
+          <ThemeSwitcher />
+        </div>
       </div>
     </nav>
 
@@ -215,6 +229,7 @@ import {
   synthesizeVoice,
   transcribeVoice,
 } from "../api";
+import { normalizeBriefingForDisplay } from "../briefingNormalize";
 import MarkdownBlock from "../components/MarkdownBlock.vue";
 import ThemeSwitcher from "../components/ThemeSwitcher.vue";
 
@@ -289,18 +304,20 @@ const fallbackHero = {
   summary: "面向招聘方的个人能力介绍页。",
 };
 
-const page = computed(() => briefing.value?.page || fallbackPage);
-const meta = computed(() => briefing.value?.meta || {});
-const hero = computed(() => briefing.value?.hero || fallbackHero);
-const fitSignals = computed(() => briefing.value?.fitSignals || []);
-const metrics = computed(() => briefing.value?.metrics || []);
-const capabilities = computed(() => briefing.value?.capabilities || []);
-const timeline = computed(() => briefing.value?.timeline || []);
-const projects = computed(() => briefing.value?.projects || []);
-const presets = computed(() => briefing.value?.suggestedQuestions || []);
+const displayBriefing = computed(() => normalizeBriefingForDisplay(briefing.value));
+const page = computed(() => displayBriefing.value?.page || fallbackPage);
+const meta = computed(() => displayBriefing.value?.meta || {});
+const hero = computed(() => displayBriefing.value?.hero || fallbackHero);
+const fitSignals = computed(() => displayBriefing.value?.fitSignals || []);
+const metrics = computed(() => displayBriefing.value?.metrics || []);
+const capabilities = computed(() => displayBriefing.value?.capabilities || []);
+const timeline = computed(() => displayBriefing.value?.timeline || []);
+const projects = computed(() => displayBriefing.value?.projects || []);
+const presets = computed(() => displayBriefing.value?.suggestedQuestions || []);
 const statusLabel = computed(() => {
-  if (briefing.value?.generated) return "LLM 已生成页面";
-  if (briefing.value?.aiConfigured) return "DeepSeek 已连接";
+  const provider = displayBriefing.value?.aiProvider || "LLM";
+  if (displayBriefing.value?.generated) return `${provider} 已生成页面`;
+  if (displayBriefing.value?.aiConfigured) return `${provider} 已连接`;
   return "本地兜底模式";
 });
 

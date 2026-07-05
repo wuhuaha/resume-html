@@ -25,6 +25,11 @@ cp .env.example .env
 编辑 `.env`：
 
 ```env
+LLM_PROVIDER=auto
+CODEX_API_KEY=
+CODEX_CHAT_MODEL=gpt-5.5
+CODEX_EXPORT_MODEL=gpt-5.5
+CODEX_REASONING_EFFORT=xhigh
 DEEPSEEK_API_KEY=
 ADMIN_PASSWORD=change-me
 SHOWCASE_MODE=false

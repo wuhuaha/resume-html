@@ -79,6 +79,7 @@ def load_profile(path: Path) -> dict[str, Any]:
 def parse_profile_markdown(markdown_text: str) -> dict[str, Any]:
     raw = markdown_text
     meta, body = parse_frontmatter(raw)
+    meta = normalize_profile_meta(meta, body)
     sections = parse_sections(body)
 
     grouped: dict[str, list[dict[str, str]]] = {
@@ -116,6 +117,45 @@ def parse_profile_markdown(markdown_text: str) -> dict[str, Any]:
         ],
         **grouped,
     }
+
+
+def normalize_profile_meta(meta: dict[str, str], body: str) -> dict[str, str]:
+    normalized = {str(key).strip(): str(value).strip() for key, value in meta.items() if str(value).strip()}
+    aliases = {
+        "birth": ("birth", "birthday", "birthDate", "dateOfBirth", "出生", "出生日期", "生日"),
+        "phone": ("phone", "mobile", "tel", "telephone", "电话", "手机号", "手机"),
+        "email": ("email", "mail", "邮箱"),
+        "location": ("location", "city", "address", "所在地", "城市", "地址"),
+        "education": ("education", "degree", "学历", "教育"),
+    }
+    for canonical, keys in aliases.items():
+        value = first_meta_value(normalized, keys)
+        if value:
+            normalized[canonical] = value
+
+    if not normalized.get("birth"):
+        extracted_birth = extract_labeled_value(body, ("出生日期", "出生", "生日"))
+        if extracted_birth:
+            normalized["birth"] = extracted_birth
+    return normalized
+
+
+def first_meta_value(meta: dict[str, str], keys: tuple[str, ...]) -> str:
+    lower_map = {key.lower(): value for key, value in meta.items()}
+    for key in keys:
+        value = meta.get(key) or lower_map.get(key.lower())
+        if value:
+            return value.strip()
+    return ""
+
+
+def extract_labeled_value(text: str, labels: tuple[str, ...]) -> str:
+    for label in labels:
+        pattern = rf"(?:^|\n)\s*(?:[-*]\s*)?{re.escape(label)}\s*[:：]\s*([^\n|，,；;]+)"
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1).strip()
+    return ""
 
 
 def bullets_from_markdown(markdown_text: str) -> list[dict[str, str]]:

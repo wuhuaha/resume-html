@@ -46,6 +46,7 @@
 
 <script setup>
 import { computed } from "vue";
+import { normalizeBriefingForDisplay } from "../briefingNormalize";
 
 const props = defineProps({
   briefing: {
@@ -78,5 +79,5 @@ const fallback = {
   suggestedQuestions: [],
 };
 
-const page = computed(() => props.briefing || fallback);
+const page = computed(() => normalizeBriefingForDisplay(props.briefing) || fallback);
 </script>

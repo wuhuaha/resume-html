@@ -108,13 +108,13 @@ def resume_header_lines(meta: dict[str, Any], mode: dict[str, Any]) -> list[str]
         f"{meta.get('title', '')} | {meta.get('tagline', '')}".strip(" |"),
     ]
     contact_parts = [
-        labeled("电话", meta.get("phone", "")),
-        labeled("邮箱", meta.get("email", "")),
-        meta.get("location", ""),
-        meta.get("education", ""),
+        labeled("电话", meta_value(meta, "phone")),
+        labeled("邮箱", meta_value(meta, "email")),
+        meta_value(meta, "location"),
+        meta_value(meta, "education"),
     ]
     if mode.get("includeBirth", True):
-        contact_parts.append(labeled("出生", meta.get("birth", "") or meta.get("birthday", "")))
+        contact_parts.append(labeled("出生", meta_value(meta, "birth")))
     lines.append(" | ".join(part for part in contact_parts if part))
     return lines
 
@@ -219,13 +219,13 @@ def ensure_resume_header_metadata(markdown_text: str, profile: dict[str, Any], m
         lines.insert(0, f"# {meta.get('name', '个人简历')}")
 
     required = [
-        labeled("电话", meta.get("phone", "")),
-        labeled("邮箱", meta.get("email", "")),
-        str(meta.get("location", "") or "").strip(),
-        str(meta.get("education", "") or "").strip(),
+        labeled("电话", meta_value(meta, "phone")),
+        labeled("邮箱", meta_value(meta, "email")),
+        meta_value(meta, "location"),
+        meta_value(meta, "education"),
     ]
     if mode.get("includeBirth", True):
-        required.append(labeled("出生", meta.get("birth", "") or meta.get("birthday", "")))
+        required.append(labeled("出生", meta_value(meta, "birth")))
     required = [item for item in required if item]
 
     contact_index = next((index for index, line in enumerate(lines[:8]) if "电话" in line or "邮箱" in line), -1)
@@ -262,10 +262,11 @@ def markdown_to_resume_html(
     line_height = mode.get("lineHeight", 1.58)
     section_spacing = mode.get("sectionSpacing", 18)
     show_avatar = bool(mode.get("includeAvatar") and template.get("showAvatar") and avatar_data_url)
+    avatar_placement = template.get("avatarPlacement") or ("sidebar-top" if layout == "sidebar" else "header-right")
     template_name = template.get("label", "简历模板")
     title = f"{template_name} - {doc['name']}"
 
-    body_html = render_resume_body(doc, layout, show_avatar, avatar_data_url, mode)
+    body_html = render_resume_body(doc, layout, show_avatar, avatar_data_url, mode, avatar_placement)
     footer_html = render_branding_footer(branding, template) if branding.get("enabled", True) else ""
 
     return f"""<!doctype html>
@@ -286,15 +287,17 @@ def markdown_to_resume_html(
     .resume.timeline .section.experience h3::before {{ content: ""; position: absolute; left: 0; top: 0.72em; width: 7px; height: 7px; border-radius: 999px; background: var(--accent); }}
     .header {{ padding-bottom: 12px; border-bottom: 2px solid var(--accent); }}
     .header.band {{ margin: -2px -2px 16px; padding: 22px 24px; color: #fff; background: linear-gradient(135deg, var(--accent), #111827); border: 0; }}
-    .header.profile {{ display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }}
-    .avatar {{ width: 82px; height: 82px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.7); }}
+    .header.profile {{ display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; }}
+    .header-main {{ min-width: 0; }}
+    .avatar {{ width: 78px; height: 96px; object-fit: cover; border-radius: 8px; border: 1px solid rgba(255,255,255,0.7); }}
+    .header.profile .avatar {{ justify-self: end; }}
     .header:not(.band) .avatar {{ border-color: var(--line); }}
     h1 {{ margin: 0 0 6px; font-size: {28 if mode.get("targetPages") == 1 else 34}px; line-height: 1.06; letter-spacing: 0; }}
     .headline {{ margin: 0; color: inherit; font-size: {font_size}px; font-weight: 700; }}
     .contact {{ margin-top: 7px; color: var(--muted); font-size: {max(10.5, font_size - 1)}px; }}
     .band .contact {{ color: rgba(255,255,255,0.86); }}
     .sidebar-info {{ padding: 18px; background: var(--soft); border-radius: 8px; }}
-    .sidebar-info .avatar {{ width: 104px; height: 104px; margin-bottom: 14px; }}
+    .sidebar-info .avatar {{ width: 108px; height: 108px; margin-bottom: 14px; }}
     .sidebar-info h1 {{ font-size: 25px; }}
     .sidebar-info .contact span {{ display: block; margin-top: 5px; }}
     .content {{ min-width: 0; }}
@@ -321,18 +324,28 @@ def markdown_to_resume_html(
 </html>"""
 
 
-def render_resume_body(doc: dict[str, Any], layout: str, show_avatar: bool, avatar_data_url: str, mode: dict[str, Any]) -> str:
+def render_resume_body(
+    doc: dict[str, Any],
+    layout: str,
+    show_avatar: bool,
+    avatar_data_url: str,
+    mode: dict[str, Any],
+    avatar_placement: str,
+) -> str:
     header_class = "header"
     if layout == "sidebar":
-        sidebar = render_sidebar(doc, show_avatar, avatar_data_url)
+        sidebar = render_sidebar(doc, show_avatar and avatar_placement == "sidebar-top", avatar_data_url)
         content = render_sections(doc, layout, mode)
-        return f"<article class='resume sidebar'>{sidebar}<div class='content'>{content}</div></article>"
+        header = ""
+        if show_avatar and avatar_placement == "header-right":
+            header = render_header(doc, "header profile", show_avatar, avatar_data_url)
+        return f"<article class='resume sidebar'>{sidebar}<div class='content'>{header}{content}</div></article>"
     if layout == "brief":
         header_class += " band"
-    elif show_avatar:
+    if show_avatar:
         header_class += " profile"
 
-    header = render_header(doc, header_class, show_avatar, avatar_data_url)
+    header = render_header(doc, header_class, show_avatar and avatar_placement == "header-right", avatar_data_url)
     sections = render_sections(doc, layout, mode)
     return f"<article class='resume {html.escape(layout)}'>{header}<div class='content'>{sections}</div></article>"
 
@@ -340,9 +353,9 @@ def render_resume_body(doc: dict[str, Any], layout: str, show_avatar: bool, avat
 def render_header(doc: dict[str, Any], class_name: str, show_avatar: bool, avatar_data_url: str) -> str:
     avatar = f"<img class='avatar' src='{html.escape(avatar_data_url)}' alt='简历头像'>" if show_avatar else ""
     inner = (
-        f"{avatar}<div><h1>{html.escape(doc['name'])}</h1>"
+        f"<div class='header-main'><h1>{html.escape(doc['name'])}</h1>"
         f"<p class='headline'>{html.escape(doc['headline'])}</p>"
-        f"<p class='contact'>{html.escape(doc['contact'])}</p></div>"
+        f"<p class='contact'>{html.escape(doc['contact'])}</p></div>{avatar}"
     )
     return f"<header class='{html.escape(class_name)}'>{inner}</header>"
 
@@ -388,7 +401,7 @@ def render_branding_footer(branding: dict[str, Any], template: dict[str, Any]) -
         return ""
     github_url = branding.get("githubUrl") or settings.project_github_url
     author = branding.get("author") or "王涛"
-    text = branding.get("text") or "本简历由开源项目 AI Profile Page 生成"
+    text = branding.get("text") or "本简历由开源项目 Resume HTML 生成"
     generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
     return (
         "<footer class='stamp'>"
@@ -501,6 +514,26 @@ def truncate_sentence(text: str, limit: int) -> str:
 def labeled(label: str, value: Any) -> str:
     text = str(value or "").strip()
     return f"{label}：{text}" if text else ""
+
+
+def meta_value(meta: dict[str, Any], key: str) -> str:
+    aliases = {
+        "birth": ("birth", "birthday", "birthDate", "dateOfBirth", "出生", "出生日期", "生日"),
+        "phone": ("phone", "mobile", "tel", "telephone", "电话", "手机号", "手机"),
+        "email": ("email", "mail", "邮箱"),
+        "location": ("location", "city", "address", "所在地", "城市", "地址"),
+        "education": ("education", "degree", "学历", "教育"),
+    }
+    for alias in aliases.get(key, (key,)):
+        value = meta.get(alias)
+        if value:
+            return str(value).strip()
+    lower_map = {str(item_key).lower(): value for item_key, value in meta.items()}
+    for alias in aliases.get(key, (key,)):
+        value = lower_map.get(alias.lower())
+        if value:
+            return str(value).strip()
+    return ""
 
 
 def safe_font_family(value: Any) -> str:

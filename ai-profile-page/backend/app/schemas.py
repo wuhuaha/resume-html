@@ -15,6 +15,7 @@ class ChatResponse(BaseModel):
     answer: str
     sources: list[str]
     configured: bool
+    provider: str = ""
 
 
 class VoiceConfigResponse(BaseModel):
@@ -59,6 +60,7 @@ class ResumeAvatarResponse(BaseModel):
     contentType: str = ""
     size: int = 0
     updatedAt: str = ""
+    dataUrl: str = ""
     message: str = ""
 
 
@@ -74,6 +76,8 @@ class BriefingResponse(BaseModel):
     suggestedQuestions: list[str]
     generated: bool
     aiConfigured: bool
+    aiProvider: str = ""
+    generationMeta: dict = Field(default_factory=dict)
 
 
 class ExportRequest(BaseModel):
@@ -89,6 +93,7 @@ class ExportResponse(BaseModel):
     filename: str
     configured: bool
     note: str
+    provider: str = ""
 
 
 class AdminLoginRequest(BaseModel):
@@ -99,6 +104,7 @@ class AdminLoginResponse(BaseModel):
     ok: bool
     message: str
     showcaseMode: bool = False
+    adminMode: bool = False
 
 
 class AdminModeResponse(BaseModel):
@@ -125,6 +131,7 @@ class AdminAiEditResponse(BaseModel):
     markdown: str
     note: str
     configured: bool
+    provider: str = ""
 
 
 class AdminPreviewRequest(BaseModel):
@@ -135,6 +142,8 @@ class AdminHomeBriefingResponse(BaseModel):
     briefing: dict
     saved: bool
     aiConfigured: bool
+    aiProvider: str = ""
+    aiModel: str = ""
 
 
 class AdminHomeBriefingSaveRequest(BaseModel):
@@ -160,18 +169,18 @@ class ResumeExportConfigResponse(BaseModel):
     activeMode: str
     activeTemplate: str = ""
     modes: dict
-    templates: dict = {}
+    templates: dict = Field(default_factory=dict)
     sectionOrder: list[str]
-    branding: dict = {}
+    branding: dict = Field(default_factory=dict)
 
 
 class ResumeExportConfigSaveRequest(BaseModel):
     activeMode: str = ""
     activeTemplate: str = ""
-    modes: dict = {}
-    templates: dict = {}
-    sectionOrder: list[str] = []
-    branding: dict = {}
+    modes: dict = Field(default_factory=dict)
+    templates: dict = Field(default_factory=dict)
+    sectionOrder: list[str] = Field(default_factory=list)
+    branding: dict = Field(default_factory=dict)
 
 
 class ReindexResponse(BaseModel):
