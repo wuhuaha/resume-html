@@ -15,7 +15,14 @@ Copy-Item .env.example .env
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `DEEPSEEK_API_KEY` | 空 | 为空时 AI 能力降级。 |
+| `LLM_PROVIDER` | `auto` | `auto`、`codex`、`deepseek` 或 `local`。`auto` 优先 Codex/OpenAI，其次 DeepSeek。 |
+| `CODEX_API_KEY` / `OPENAI_API_KEY` | 空 | Codex/OpenAI-compatible API Key。配置后可用于所有 LLM 能力。 |
+| `CODEX_BASE_URL` | `https://api.openai.com/v1` | Codex/OpenAI-compatible API base URL。 |
+| `CODEX_CHAT_MODEL` | `gpt-5.5` | 首页问答、后台编辑、首页编排模型。 |
+| `CODEX_EXPORT_MODEL` | `gpt-5.5` | 简历导出模型。 |
+| `CODEX_REASONING_EFFORT` | `xhigh` | Responses API 推理强度。 |
+| `CODEX_ENDPOINT` | `responses` | 默认使用 Responses API，也可设为 `chat_completions` 兼容 Chat Completions。 |
+| `DEEPSEEK_API_KEY` | 空 | DeepSeek API Key，未配置 Codex/OpenAI 时可作为回退。 |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | DeepSeek API base URL。 |
 | `DEEPSEEK_CHAT_MODEL` | `deepseek-v4-flash` | 问答和后台编辑模型。 |
 | `DEEPSEEK_EXPORT_MODEL` | `deepseek-v4-pro` | 简历导出模型。 |

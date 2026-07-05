@@ -313,8 +313,9 @@ const timeline = computed(() => briefing.value?.timeline || []);
 const projects = computed(() => briefing.value?.projects || []);
 const presets = computed(() => briefing.value?.suggestedQuestions || []);
 const statusLabel = computed(() => {
-  if (briefing.value?.generated) return "LLM 已生成页面";
-  if (briefing.value?.aiConfigured) return "DeepSeek 已连接";
+  const provider = briefing.value?.aiProvider || "LLM";
+  if (briefing.value?.generated) return `${provider} 已生成页面`;
+  if (briefing.value?.aiConfigured) return `${provider} 已连接`;
   return "本地兜底模式";
 });
 

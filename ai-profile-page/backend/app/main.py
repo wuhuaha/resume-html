@@ -149,12 +149,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
     messages = build_chat_messages(profile, context, request)
 
     if deepseek_client.configured:
-        answer = await deepseek_client.chat(messages, settings.deepseek_chat_model)
+        answer = await deepseek_client.chat(messages)
         answer = normalize_chat_answer_perspective(answer, profile)
-        return ChatResponse(answer=answer, sources=sources, configured=True)
+        return ChatResponse(answer=answer, sources=sources, configured=True, provider=deepseek_client.last_provider_label)
 
     fallback = local_answer(request.question, profile)
-    return ChatResponse(answer=fallback, sources=sources, configured=False)
+    return ChatResponse(answer=fallback, sources=sources, configured=False, provider=deepseek_client.provider_label)
 
 
 def build_chat_messages(profile: dict, context: str, request: ChatRequest) -> list[dict[str, str]]:
@@ -312,7 +312,7 @@ async def export_resume(request: ExportRequest) -> ExportResponse:
     template = active_resume_template(export_config, request.template)
     base_markdown = local_match_resume(profile, request.jd, request.direction, mode)
     configured = deepseek_client.configured
-    note = f"未配置 DeepSeek API Key，已按“{mode['label']} / {template['label']}”生成本地保守匹配版本。"
+    note = f"未配置 LLM API Key，已按“{mode['label']} / {template['label']}”生成本地保守匹配版本。"
 
     if configured and request.jd.strip():
         system_prompt = (
@@ -343,10 +343,10 @@ async def export_resume(request: ExportRequest) -> ExportResponse:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
-            settings.deepseek_export_model,
+            purpose="export",
         )
         base_markdown = compact_resume_markdown(base_markdown, mode)
-        note = f"已基于 DeepSeek 和资料约束生成匹配简历，并按“{mode['label']} / {template['label']}”策略控制篇幅与版式。"
+        note = f"已基于 {deepseek_client.last_provider_label} 和资料约束生成匹配简历，并按“{mode['label']} / {template['label']}”策略控制篇幅与版式。"
 
     base_markdown = ensure_resume_header_metadata(base_markdown, profile, mode)
     avatar_data = resume_avatar_data_url() if mode.get("includeAvatar") and template.get("showAvatar") else ""
@@ -363,6 +363,7 @@ async def export_resume(request: ExportRequest) -> ExportResponse:
         filename=f"wangtao-{template['key']}-{mode['key']}.html",
         configured=configured,
         note=note,
+        provider=deepseek_client.last_provider_label if configured else deepseek_client.provider_label,
     )
 
 
@@ -432,8 +433,9 @@ async def ai_edit_markdown(
     if not deepseek_client.configured:
         return AdminAiEditResponse(
             markdown=request.markdown,
-            note="后端未配置 DeepSeek API Key，无法执行 AI 修改。",
+            note="后端未配置 LLM API Key，无法执行 AI 修改。",
             configured=False,
+            provider=deepseek_client.provider_label,
         )
 
     system_prompt = (
@@ -448,13 +450,13 @@ async def ai_edit_markdown(
         [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": prompt},
-        ],
-        settings.deepseek_chat_model,
+        ]
     )
     return AdminAiEditResponse(
         markdown=strip_markdown_fence(edited),
-        note="已生成 Markdown 草稿。请预览确认后再保存。",
+        note=f"已通过 {deepseek_client.last_provider_label} 生成 Markdown 草稿。请预览确认后再保存。",
         configured=True,
+        provider=deepseek_client.last_provider_label,
     )
 
 
@@ -477,6 +479,7 @@ async def get_home_briefing(_: None = Depends(verify_admin_password)) -> AdminHo
         briefing=briefing,
         saved=saved is not None,
         aiConfigured=deepseek_client.configured,
+        aiProvider=deepseek_client.provider_label,
     )
 
 
@@ -491,10 +494,11 @@ async def ai_edit_home_briefing(
             briefing=request.briefing,
             saved=False,
             aiConfigured=False,
+            aiProvider=deepseek_client.provider_label,
         )
 
     briefing = await adjust_briefing_with_ai(profile, request.briefing, request.instruction)
-    return AdminHomeBriefingResponse(briefing=briefing, saved=False, aiConfigured=True)
+    return AdminHomeBriefingResponse(briefing=briefing, saved=False, aiConfigured=True, aiProvider=deepseek_client.last_provider_label)
 
 
 @app.put("/api/admin/home-briefing", response_model=AdminHomeBriefingResponse)
@@ -511,6 +515,7 @@ async def save_home_briefing(
         briefing=normalized,
         saved=True,
         aiConfigured=deepseek_client.configured,
+        aiProvider=deepseek_client.provider_label,
     )
 
 
@@ -632,6 +637,7 @@ async def normalize_home_briefing(profile: dict, briefing: dict) -> dict:
     normalized = merge_briefing(local_briefing(profile), briefing)
     normalized["generated"] = bool(briefing.get("generated", True))
     normalized["aiConfigured"] = deepseek_client.configured
+    normalized["aiProvider"] = briefing.get("aiProvider") or deepseek_client.provider_label
     return normalized
 
 

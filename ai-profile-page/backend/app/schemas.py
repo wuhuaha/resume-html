@@ -15,6 +15,7 @@ class ChatResponse(BaseModel):
     answer: str
     sources: list[str]
     configured: bool
+    provider: str = ""
 
 
 class VoiceConfigResponse(BaseModel):
@@ -75,6 +76,7 @@ class BriefingResponse(BaseModel):
     suggestedQuestions: list[str]
     generated: bool
     aiConfigured: bool
+    aiProvider: str = ""
 
 
 class ExportRequest(BaseModel):
@@ -90,6 +92,7 @@ class ExportResponse(BaseModel):
     filename: str
     configured: bool
     note: str
+    provider: str = ""
 
 
 class AdminLoginRequest(BaseModel):
@@ -127,6 +130,7 @@ class AdminAiEditResponse(BaseModel):
     markdown: str
     note: str
     configured: bool
+    provider: str = ""
 
 
 class AdminPreviewRequest(BaseModel):
@@ -137,6 +141,7 @@ class AdminHomeBriefingResponse(BaseModel):
     briefing: dict
     saved: bool
     aiConfigured: bool
+    aiProvider: str = ""
 
 
 class AdminHomeBriefingSaveRequest(BaseModel):

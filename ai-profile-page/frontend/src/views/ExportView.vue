@@ -114,7 +114,7 @@ const mode = ref("one-page");
 const exportConfig = ref(null);
 const resultHtml = ref("");
 const filename = ref("wangtao-resume.html");
-const note = ref("后端未配置 DeepSeek Key 时，会使用本地资料生成保守版本。");
+const note = ref("后端未配置 LLM Key 时，会使用本地资料生成保守版本。");
 const loading = ref(false);
 
 const templates = computed(() => {

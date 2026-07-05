@@ -25,6 +25,7 @@ def read_briefing_override(path: Path, profile: dict[str, Any]) -> dict[str, Any
     merged = merge_briefing(fallback, raw)
     merged["generated"] = bool(raw.get("generated", True))
     merged["aiConfigured"] = deepseek_client.configured
+    merged["aiProvider"] = raw.get("aiProvider") or deepseek_client.provider_label
     return merged
 
 
@@ -135,6 +136,7 @@ def local_briefing(profile: dict[str, Any]) -> dict[str, Any]:
         ],
         "generated": False,
         "aiConfigured": deepseek_client.configured,
+        "aiProvider": deepseek_client.provider_label,
     }
 
 
@@ -211,13 +213,13 @@ async def generate_briefing(profile: dict[str, Any], *, use_override: bool = Tru
             [
                 {"role": "system", "content": f"你只输出合法 JSON。候选人姓名是 {fallback['meta'].get('name', fallback['hero']['headline'])}，不得使用任何其他人名。"},
                 {"role": "user", "content": prompt},
-            ],
-            settings.deepseek_chat_model,
+            ]
         )
         parsed = parse_json_object(raw)
         merged = merge_briefing(fallback, parsed)
         merged["generated"] = True
         merged["aiConfigured"] = True
+        merged["aiProvider"] = deepseek_client.last_provider_label
         _briefing_cache[cache_key] = merged
         return deepcopy(merged)
     except Exception:
@@ -258,13 +260,13 @@ async def adjust_briefing_with_ai(
         [
             {"role": "system", "content": "你只输出合法 JSON，且不得编造事实。"},
             {"role": "user", "content": prompt},
-        ],
-        settings.deepseek_chat_model,
+        ]
     )
     parsed = parse_json_object(raw)
     merged = merge_briefing(fallback, parsed)
     merged["generated"] = True
     merged["aiConfigured"] = True
+    merged["aiProvider"] = deepseek_client.last_provider_label
     polish_generated_copy(merged, fallback)
     return merged
 
@@ -341,8 +343,7 @@ def merge_briefing(fallback: dict[str, Any], generated: dict[str, Any]) -> dict[
 
 def briefing_cache_key(profile: dict[str, Any]) -> str:
     raw = profile.get("rawMarkdown", "")
-    configured = "deepseek" if deepseek_client.configured else "local"
-    payload = f"{configured}:{settings.deepseek_chat_model}:{raw}"
+    payload = f"{deepseek_client.active_provider}:{deepseek_client.chat_model}:{raw}"
     return sha256(payload.encode("utf-8")).hexdigest()
 
 

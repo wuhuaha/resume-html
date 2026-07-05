@@ -35,7 +35,7 @@
 | 前端 | Vue 3, Vite, Naive UI, Lucide Icons |
 | 后端 | FastAPI, Pydantic Settings, HTTPX |
 | 内容 | Markdown, JSON 配置 |
-| AI | DeepSeek Chat API |
+| AI | Codex/OpenAI-compatible Responses API, DeepSeek Chat API |
 | 语音 | Xiaomi MiMo ASR/TTS, voice clone reference audio |
 | 导入导出 | python-docx, pypdf, markdown-to-html resume rendering |
 
@@ -88,10 +88,15 @@ npm run dev
 
 | 变量 | 说明 |
 | --- | --- |
-| `DEEPSEEK_API_KEY` | DeepSeek API Key。为空时 AI 问答和导出会降级为本地保守结果。 |
+| `LLM_PROVIDER` | `auto`、`codex`、`deepseek` 或 `local`。`auto` 会优先使用 Codex/OpenAI Key，其次 DeepSeek。 |
+| `CODEX_API_KEY` / `OPENAI_API_KEY` | Codex/OpenAI-compatible API Key。配置后可用于首页生成、问答、后台编辑、热词和简历导出。 |
+| `CODEX_CHAT_MODEL` | 首页问答、后台编辑、首页编排使用的 Codex/OpenAI 模型，默认 `gpt-5.5`。 |
+| `CODEX_EXPORT_MODEL` | JD 简历导出使用的 Codex/OpenAI 模型。 |
+| `CODEX_REASONING_EFFORT` | Responses API 推理强度，默认 `xhigh`。 |
+| `DEEPSEEK_API_KEY` | DeepSeek API Key。未配置 Codex/OpenAI 时可作为回退。 |
 | `DEEPSEEK_BASE_URL` | DeepSeek API 地址。 |
-| `DEEPSEEK_CHAT_MODEL` | 首页问答、后台编辑使用的模型。 |
-| `DEEPSEEK_EXPORT_MODEL` | JD 简历导出使用的模型。 |
+| `DEEPSEEK_CHAT_MODEL` | DeepSeek 问答、后台编辑使用的模型。 |
+| `DEEPSEEK_EXPORT_MODEL` | DeepSeek JD 简历导出使用的模型。 |
 | `ADMIN_PASSWORD` | 后台管理密码，生产环境必须改成强密码。 |
 | `SHOWCASE_MODE` | 设为 `true` 后后台免验证，但保存会失败，适合公开演示。 |
 | `FRONTEND_ORIGIN` | 前端源，用于 CORS。 |

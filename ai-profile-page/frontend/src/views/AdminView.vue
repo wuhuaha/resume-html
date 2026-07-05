@@ -1187,7 +1187,7 @@ async function runHomeEdit() {
     homeBriefing.value = result.briefing;
     homeSaved.value = result.saved;
     homeDirty.value = true;
-    setStatus(result.aiConfigured ? "已生成首页编排草稿。" : "后端未配置 DeepSeek API Key。", result.aiConfigured ? "success" : "warning");
+    setStatus(result.aiConfigured ? `已通过 ${result.aiProvider || "LLM"} 生成首页编排草稿。` : "后端未配置 LLM API Key。", result.aiConfigured ? "success" : "warning");
   } catch (error) {
     setStatus(`首页编排失败：${error.message}`, "error");
   } finally {
@@ -1205,7 +1205,7 @@ async function regenerateHomeFromMarkdown() {
     homeSaved.value = false;
     homeDirty.value = true;
     setStatus(
-      result.aiConfigured ? "已基于当前 Markdown 重新生成首页草稿。" : "已基于当前 Markdown 生成本地首页草稿；后端未配置 DeepSeek API Key。",
+      result.aiConfigured ? `已通过 ${result.aiProvider || "LLM"} 基于当前 Markdown 重新生成首页草稿。` : "已基于当前 Markdown 生成本地首页草稿；后端未配置 LLM API Key。",
       result.aiConfigured ? "success" : "warning",
     );
   } catch (error) {
