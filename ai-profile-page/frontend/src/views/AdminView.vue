@@ -248,6 +248,22 @@
               适合在资料库 Markdown 修改后使用；下方“按说明微调”只会继续调整当前首页草稿。
             </p>
 
+            <div class="home-generation-panel" :class="`is-${homeGenerationTone}`" aria-live="polite">
+              <div class="home-generation-head">
+                <span class="home-generation-dot" :class="{ running: homeGenerationRunning }"></span>
+                <div>
+                  <strong>{{ homeGenerationTitle }}</strong>
+                  <p>{{ homeGenerationMessage }}</p>
+                </div>
+              </div>
+              <div class="home-generation-meta">
+                <span>{{ homeGenerationStatusText }}</span>
+                <span v-if="homeGenerationProvider">{{ homeGenerationProvider }}</span>
+                <span v-if="homeGenerationModel">{{ homeGenerationModel }}</span>
+                <span v-if="homeGenerationDuration">{{ homeGenerationDuration }}</span>
+              </div>
+            </div>
+
             <div class="ai-preset-list">
               <button v-for="item in homePresets" :key="item" type="button" @click="homeInstruction = item">
                 {{ item }}
@@ -289,7 +305,10 @@
               <h2>{{ previewTitle }}</h2>
             </div>
             <div class="admin-doc-stats">
-              <span>{{ homeBriefing?.generated ? "LLM 生成" : "本地解析" }}</span>
+              <span>{{ homeSourceLabel }}</span>
+              <span v-if="homeGenerationProvider">{{ homeGenerationProvider }}</span>
+              <span v-if="homeGenerationModel">{{ homeGenerationModel }}</span>
+              <span v-if="homeGenerationDuration">{{ homeGenerationDuration }}</span>
             </div>
           </div>
           <BriefingPreview :briefing="homeBriefing" variant="wide" />
@@ -870,6 +889,14 @@ const homeLoading = ref(false);
 const homeAiLoading = ref(false);
 const homeRegenerating = ref(false);
 const homeSaving = ref(false);
+const homeGenerationState = ref("idle");
+const homeGenerationAction = ref("");
+const homeGenerationStartedAt = ref(0);
+const homeGenerationFinishedAt = ref(0);
+const homeGenerationElapsedMs = ref(0);
+const homeGenerationError = ref("");
+const homeGenerationMeta = ref(null);
+let homeGenerationTimer = null;
 const selectedStyleKey = ref(activeKey.value);
 const styleSaving = ref(false);
 const resumeConfig = ref({
@@ -915,6 +942,71 @@ const displayPath = computed(() => {
   return documentPath.value.split(/[\\/]/).slice(-3).join("/");
 });
 const previewTitle = computed(() => homeBriefing.value?.hero?.statement || "等待生成首页编排");
+const homeGenerationRunning = computed(() => ["regenerating", "editing", "loading", "saving"].includes(homeGenerationState.value));
+const homeGenerationTone = computed(() => {
+  if (homeGenerationState.value === "failed") return "failed";
+  if (homeGenerationRunning.value) return "running";
+  if (homeDirty.value) return "draft";
+  if (homeSaved.value) return "saved";
+  return "idle";
+});
+const homeGenerationProvider = computed(() => homeGenerationMeta.value?.provider || homeBriefing.value?.aiProvider || "");
+const homeGenerationModel = computed(() => homeGenerationMeta.value?.model || "");
+const homeGenerationDuration = computed(() => {
+  const elapsed = homeGenerationElapsedMs.value || Number(homeGenerationMeta.value?.durationMs || 0);
+  if (!elapsed) return "";
+  if (elapsed < 1000) return `${elapsed} ms`;
+  return `${(elapsed / 1000).toFixed(1)} s`;
+});
+const homeSourceLabel = computed(() => {
+  if (!homeBriefing.value) return "未生成";
+  if (homeBriefing.value.generated) return "LLM 生成";
+  return "本地解析";
+});
+const homeGenerationStatusText = computed(() => {
+  if (homeGenerationState.value === "regenerating") return "重新生成中";
+  if (homeGenerationState.value === "editing") return "AI 微调中";
+  if (homeGenerationState.value === "loading") return "加载中";
+  if (homeGenerationState.value === "saving") return "保存中";
+  if (homeGenerationState.value === "failed") return "失败";
+  if (homeDirty.value) return "草稿未保存";
+  if (homeSaved.value) return "已保存";
+  return homeSourceLabel.value;
+});
+const homeGenerationTitle = computed(() => {
+  if (homeGenerationState.value === "regenerating") return "正在重新生成首页编排";
+  if (homeGenerationState.value === "editing") return "正在按说明微调首页草稿";
+  if (homeGenerationState.value === "loading") return "正在读取首页编排";
+  if (homeGenerationState.value === "saving") return "正在保存首页编排";
+  if (homeGenerationState.value === "failed") return "首页编排操作失败";
+  if (homeDirty.value) return "首页草稿已更新，尚未保存";
+  if (homeSaved.value) return "当前显示已发布首页编排";
+  return "首页编排状态";
+});
+const homeGenerationMessage = computed(() => {
+  if (homeGenerationState.value === "regenerating") {
+    return "后端正在读取当前 Markdown 并调用模型生成新的首页结构，完成后会自动刷新右侧预览。";
+  }
+  if (homeGenerationState.value === "editing") {
+    return "模型正在基于当前首页草稿和你的说明调整展示文案与排序。";
+  }
+  if (homeGenerationState.value === "loading") {
+    return "正在同步服务端保存的首页编排和上次生成信息。";
+  }
+  if (homeGenerationState.value === "saving") {
+    return "正在写入公开首页配置，完成后访客页面会使用该版本。";
+  }
+  if (homeGenerationState.value === "failed") {
+    return homeGenerationError.value || "请检查网络、模型配置或后端日志后重试。";
+  }
+  if (homeDirty.value) {
+    return "右侧预览已更新，但还只是草稿；点击“保存首页”后才会成为公开首页。";
+  }
+  if (homeSaved.value) {
+    return "这是服务端当前保存的首页编排，可继续基于 Markdown 重新生成或按说明微调。";
+  }
+  return "点击“基于当前 Markdown 重新生成首页”后，这里会显示进度、模型和耗时。";
+});
 const selectedStyle = computed(() => stylePresets.value.find((preset) => preset.key === selectedStyleKey.value) || activeTheme.value);
 const activeResumeMode = computed(() => {
   const modes = resumeConfig.value.modes || {};
@@ -968,12 +1060,62 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   clearResumeAvatarLocalPreview();
+  stopHomeGenerationTimer();
   if (recordedVoiceUrl.value) URL.revokeObjectURL(recordedVoiceUrl.value);
 });
 
 function setStatus(message, type = "info") {
   status.value = message;
   statusType.value = type;
+}
+
+function startHomeGeneration(state, action = "") {
+  stopHomeGenerationTimer();
+  homeGenerationState.value = state;
+  homeGenerationAction.value = action;
+  homeGenerationStartedAt.value = Date.now();
+  homeGenerationFinishedAt.value = 0;
+  homeGenerationElapsedMs.value = 0;
+  homeGenerationError.value = "";
+  homeGenerationTimer = window.setInterval(() => {
+    if (homeGenerationStartedAt.value) {
+      homeGenerationElapsedMs.value = Date.now() - homeGenerationStartedAt.value;
+    }
+  }, 250);
+}
+
+function finishHomeGeneration(state, payload = {}) {
+  if (homeGenerationStartedAt.value) {
+    homeGenerationFinishedAt.value = Date.now();
+    homeGenerationElapsedMs.value = homeGenerationFinishedAt.value - homeGenerationStartedAt.value;
+  }
+  stopHomeGenerationTimer();
+  homeGenerationState.value = state;
+  homeGenerationError.value = payload.error || "";
+  if (payload.meta || payload.briefing || payload.response) {
+    rememberHomeGenerationMeta(payload);
+  }
+}
+
+function stopHomeGenerationTimer() {
+  if (homeGenerationTimer) {
+    window.clearInterval(homeGenerationTimer);
+    homeGenerationTimer = null;
+  }
+}
+
+function rememberHomeGenerationMeta(payload = {}) {
+  const briefing = payload.briefing || payload;
+  const response = payload.response || {};
+  const meta = payload.meta || briefing?.generationMeta || {};
+  homeGenerationMeta.value = {
+    ...meta,
+    provider: meta.provider || response.aiProvider || briefing?.aiProvider || "",
+    model: meta.model || response.aiModel || "",
+    status: meta.status || homeGenerationState.value,
+    generated: Boolean(meta.generated ?? briefing?.generated),
+    durationMs: homeGenerationElapsedMs.value || Number(meta.durationMs || 0),
+  };
 }
 
 function formatSaveError(error, target = "保存") {
@@ -1166,12 +1308,16 @@ async function runMarkdownEdit() {
 
 async function loadHomeBriefing() {
   homeLoading.value = true;
+  startHomeGeneration("loading", "load");
   try {
     const result = await getHomeBriefingDraft(adminPassword.value);
     homeBriefing.value = result.briefing;
     homeSaved.value = result.saved;
     homeDirty.value = false;
+    rememberHomeGenerationMeta({ response: result, briefing: result.briefing });
+    finishHomeGeneration("idle", { response: result, briefing: result.briefing });
   } catch (error) {
+    finishHomeGeneration("failed", { error: `首页编排加载失败：${error.message}` });
     setStatus(`首页编排加载失败：${error.message}`, "error");
   } finally {
     homeLoading.value = false;
@@ -1182,13 +1328,17 @@ async function runHomeEdit() {
   const content = homeInstruction.value.trim();
   if (!content || !homeBriefing.value) return;
   homeAiLoading.value = true;
+  startHomeGeneration("editing", "edit");
+  setStatus("正在按说明调用模型微调首页草稿。", "info");
   try {
     const result = await aiEditHomeBriefing(adminPassword.value, homeBriefing.value, content);
     homeBriefing.value = result.briefing;
     homeSaved.value = result.saved;
     homeDirty.value = true;
+    finishHomeGeneration("idle", { response: result, briefing: result.briefing });
     setStatus(result.aiConfigured ? `已通过 ${result.aiProvider || "LLM"} 生成首页编排草稿。` : "后端未配置 LLM API Key。", result.aiConfigured ? "success" : "warning");
   } catch (error) {
+    finishHomeGeneration("failed", { error: `首页编排失败：${error.message}` });
     setStatus(`首页编排失败：${error.message}`, "error");
   } finally {
     homeAiLoading.value = false;
@@ -1198,17 +1348,20 @@ async function runHomeEdit() {
 async function regenerateHomeFromMarkdown() {
   if (!markdown.value.trim()) return;
   homeRegenerating.value = true;
+  startHomeGeneration("regenerating", "regenerate");
   setStatus("正在基于当前 Markdown 重新生成首页草稿，请稍候。", "info");
   try {
     const result = await previewMarkdownBriefing(adminPassword.value, markdown.value);
     homeBriefing.value = result;
     homeSaved.value = false;
     homeDirty.value = true;
+    finishHomeGeneration("idle", { briefing: result });
     setStatus(
       result.aiConfigured ? `已通过 ${result.aiProvider || "LLM"} 基于当前 Markdown 重新生成首页草稿。` : "已基于当前 Markdown 生成本地首页草稿；后端未配置 LLM API Key。",
       result.aiConfigured ? "success" : "warning",
     );
   } catch (error) {
+    finishHomeGeneration("failed", { error: `首页重新生成失败：${error.message}` });
     setStatus(`首页重新生成失败：${error.message}`, "error");
   } finally {
     homeRegenerating.value = false;
@@ -1218,13 +1371,16 @@ async function regenerateHomeFromMarkdown() {
 async function saveHomeDraft() {
   if (!homeBriefing.value) return;
   homeSaving.value = true;
+  startHomeGeneration("saving", "save");
   try {
     const result = await saveHomeBriefing(adminPassword.value, homeBriefing.value);
     homeBriefing.value = result.briefing;
     homeSaved.value = result.saved;
     homeDirty.value = false;
+    finishHomeGeneration("idle", { response: result, briefing: result.briefing });
     setStatus("首页编排已保存，公开首页将使用该版本。", "success");
   } catch (error) {
+    finishHomeGeneration("failed", { error: formatSaveError(error, "首页保存") });
     setStatus(formatSaveError(error, "首页保存"), "error");
   } finally {
     homeSaving.value = false;

@@ -17,6 +17,7 @@ class LlmClient:
         self.codex_api_key = settings.codex_api_key or settings.openai_api_key
         self.provider_mode = settings.llm_provider.lower().strip() or "auto"
         self.last_provider = ""
+        self.last_model = ""
 
     @property
     def active_provider(self) -> str:
@@ -78,19 +79,25 @@ class LlmClient:
     async def chat(self, messages: list[dict[str, str]], model: str = "", purpose: ChatPurpose = "chat") -> str:
         provider = self.active_provider
         if provider == "codex":
+            active_model = model or self.model_for(purpose)
             try:
-                result = await self._codex_chat(messages, model or self.model_for(purpose))
+                result = await self._codex_chat(messages, active_model)
                 self.last_provider = "codex"
+                self.last_model = active_model
                 return result
             except Exception:
                 if self.provider_mode == "auto" and self.deepseek_configured:
-                    result = await self._deepseek_chat(messages, self.model_for(purpose))
+                    fallback_model = settings.deepseek_export_model if purpose == "export" else settings.deepseek_chat_model
+                    result = await self._deepseek_chat(messages, fallback_model)
                     self.last_provider = "deepseek"
+                    self.last_model = fallback_model
                     return result
                 raise
         if provider == "deepseek":
-            result = await self._deepseek_chat(messages, model or self.model_for(purpose))
+            active_model = model or self.model_for(purpose)
+            result = await self._deepseek_chat(messages, active_model)
             self.last_provider = "deepseek"
+            self.last_model = active_model
             return result
         raise RuntimeError("LLM provider is not configured.")
 

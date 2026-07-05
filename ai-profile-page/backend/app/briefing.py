@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from copy import deepcopy
+from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,12 @@ def read_briefing_override(path: Path, profile: dict[str, Any]) -> dict[str, Any
     merged["generated"] = bool(raw.get("generated", True))
     merged["aiConfigured"] = deepseek_client.configured
     merged["aiProvider"] = raw.get("aiProvider") or deepseek_client.provider_label
+    merged["generationMeta"] = raw.get("generationMeta") or generation_meta(
+        status="saved",
+        generated=merged["generated"],
+        provider=merged["aiProvider"],
+        model=raw.get("aiModel", ""),
+    )
     return merged
 
 
@@ -137,6 +144,7 @@ def local_briefing(profile: dict[str, Any]) -> dict[str, Any]:
         "generated": False,
         "aiConfigured": deepseek_client.configured,
         "aiProvider": deepseek_client.provider_label,
+        "generationMeta": generation_meta(status="local", generated=False),
     }
 
 
@@ -148,7 +156,13 @@ async def generate_briefing(profile: dict[str, Any], *, use_override: bool = Tru
 
     cache_key = briefing_cache_key(profile)
     if cache_key in _briefing_cache:
-        return deepcopy(_briefing_cache[cache_key])
+        cached = deepcopy(_briefing_cache[cache_key])
+        cached["generationMeta"] = {
+            **cached.get("generationMeta", generation_meta(status="cached", generated=cached.get("generated", False))),
+            "status": "cached",
+            "cached": True,
+        }
+        return cached
 
     fallback = local_briefing(profile)
     if not deepseek_client.configured:
@@ -220,9 +234,16 @@ async def generate_briefing(profile: dict[str, Any], *, use_override: bool = Tru
         merged["generated"] = True
         merged["aiConfigured"] = True
         merged["aiProvider"] = deepseek_client.last_provider_label
+        merged["generationMeta"] = generation_meta(
+            status="generated",
+            generated=True,
+            provider=deepseek_client.last_provider_label,
+            model=deepseek_client.last_model,
+        )
         _briefing_cache[cache_key] = merged
         return deepcopy(merged)
     except Exception:
+        fallback["generationMeta"] = generation_meta(status="fallback", generated=False)
         _briefing_cache[cache_key] = fallback
         return deepcopy(fallback)
 
@@ -267,12 +288,35 @@ async def adjust_briefing_with_ai(
     merged["generated"] = True
     merged["aiConfigured"] = True
     merged["aiProvider"] = deepseek_client.last_provider_label
+    merged["generationMeta"] = generation_meta(
+        status="generated",
+        generated=True,
+        provider=deepseek_client.last_provider_label,
+        model=deepseek_client.last_model,
+    )
     polish_generated_copy(merged, fallback)
     return merged
 
 
 def clear_briefing_cache() -> None:
     _briefing_cache.clear()
+
+
+def generation_meta(
+    *,
+    status: str,
+    generated: bool,
+    provider: str = "",
+    model: str = "",
+) -> dict[str, Any]:
+    return {
+        "status": status,
+        "generated": generated,
+        "provider": provider or deepseek_client.provider_label,
+        "model": model or deepseek_client.model_for("chat"),
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "cached": False,
+    }
 
 
 def parse_json_object(text: str) -> dict[str, Any]:

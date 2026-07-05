@@ -77,6 +77,7 @@ class BriefingResponse(BaseModel):
     generated: bool
     aiConfigured: bool
     aiProvider: str = ""
+    generationMeta: dict = {}
 
 
 class ExportRequest(BaseModel):
@@ -142,6 +143,7 @@ class AdminHomeBriefingResponse(BaseModel):
     saved: bool
     aiConfigured: bool
     aiProvider: str = ""
+    aiModel: str = ""
 
 
 class AdminHomeBriefingSaveRequest(BaseModel):

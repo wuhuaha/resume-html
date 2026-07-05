@@ -480,6 +480,7 @@ async def get_home_briefing(_: None = Depends(verify_admin_password)) -> AdminHo
         saved=saved is not None,
         aiConfigured=deepseek_client.configured,
         aiProvider=deepseek_client.provider_label,
+        aiModel=briefing.get("generationMeta", {}).get("model") or deepseek_client.model_for("chat"),
     )
 
 
@@ -495,10 +496,17 @@ async def ai_edit_home_briefing(
             saved=False,
             aiConfigured=False,
             aiProvider=deepseek_client.provider_label,
+            aiModel=deepseek_client.model_for("chat"),
         )
 
     briefing = await adjust_briefing_with_ai(profile, request.briefing, request.instruction)
-    return AdminHomeBriefingResponse(briefing=briefing, saved=False, aiConfigured=True, aiProvider=deepseek_client.last_provider_label)
+    return AdminHomeBriefingResponse(
+        briefing=briefing,
+        saved=False,
+        aiConfigured=True,
+        aiProvider=deepseek_client.last_provider_label,
+        aiModel=deepseek_client.last_model or deepseek_client.model_for("chat"),
+    )
 
 
 @app.put("/api/admin/home-briefing", response_model=AdminHomeBriefingResponse)
@@ -516,6 +524,7 @@ async def save_home_briefing(
         saved=True,
         aiConfigured=deepseek_client.configured,
         aiProvider=deepseek_client.provider_label,
+        aiModel=normalized.get("generationMeta", {}).get("model") or deepseek_client.model_for("chat"),
     )
 
 
@@ -638,6 +647,13 @@ async def normalize_home_briefing(profile: dict, briefing: dict) -> dict:
     normalized["generated"] = bool(briefing.get("generated", True))
     normalized["aiConfigured"] = deepseek_client.configured
     normalized["aiProvider"] = briefing.get("aiProvider") or deepseek_client.provider_label
+    normalized["generationMeta"] = briefing.get("generationMeta") or {
+        "status": "saved",
+        "generated": normalized["generated"],
+        "provider": normalized["aiProvider"],
+        "model": deepseek_client.model_for("chat"),
+        "cached": False,
+    }
     return normalized
 
 
