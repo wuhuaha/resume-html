@@ -1128,6 +1128,13 @@ p {
   font-size: 0.9rem;
 }
 
+.admin-flow-hint {
+  margin: 10px 0 16px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
 .secondary-heading,
 .inline-heading {
   margin-top: 22px;

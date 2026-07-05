@@ -229,8 +229,24 @@
           <section class="admin-action-section">
             <div class="admin-section-heading">
               <h2>调整首页</h2>
-              <p>{{ showcaseMode && !adminMode ? "展示模式下可生成首页草稿并预览；切换到管理员模式后可保存到公开首页。" : "这里改的是展示编排层，不会修改 Markdown 事实资料。" }}</p>
+              <p>{{ showcaseMode && !adminMode ? "展示模式下可基于当前 Markdown 生成首页草稿并预览；切换到管理员模式后可保存到公开首页。" : "修改 Markdown 后，先重新生成首页草稿，确认预览后再保存首页。" }}</p>
             </div>
+
+            <n-button
+              block
+              type="primary"
+              size="large"
+              :loading="homeRegenerating"
+              :disabled="!markdown.trim()"
+              @click="regenerateHomeFromMarkdown"
+            >
+              <template #icon><RefreshCw :size="18" /></template>
+              基于当前 Markdown 重新生成首页
+            </n-button>
+
+            <p class="admin-flow-hint">
+              适合在资料库 Markdown 修改后使用；下方“按说明微调”只会继续调整当前首页草稿。
+            </p>
 
             <div class="ai-preset-list">
               <button v-for="item in homePresets" :key="item" type="button" @click="homeInstruction = item">
@@ -248,7 +264,7 @@
             <div class="ai-command-row">
               <n-button type="primary" :loading="homeAiLoading" :disabled="!homeInstruction.trim()" @click="runHomeEdit">
                 <template #icon><Bot :size="18" /></template>
-                生成首页草稿
+                按说明微调草稿
               </n-button>
               <n-button :loading="homeLoading" @click="loadHomeBriefing">
                 <template #icon><RefreshCw :size="18" /></template>
@@ -787,6 +803,7 @@ import {
   getResumeAvatar,
   getVoiceCloneReference,
   importDocument,
+  previewMarkdownBriefing,
   reindexContent,
   saveAdminSiteStyle,
   saveAdminResumeExportConfig,
@@ -851,6 +868,7 @@ const homeDirty = ref(false);
 const homeSaved = ref(false);
 const homeLoading = ref(false);
 const homeAiLoading = ref(false);
+const homeRegenerating = ref(false);
 const homeSaving = ref(false);
 const selectedStyleKey = ref(activeKey.value);
 const styleSaving = ref(false);
@@ -1092,7 +1110,7 @@ async function saveMarkdown() {
     sectionCount.value = result.sections;
     markdownDirty.value = false;
     await loadHomeBriefing();
-    setStatus(result.message, "success");
+    setStatus(`${result.message} 如需更新公开首页，请切到“首页编排”并点击“基于当前 Markdown 重新生成首页”。`, "success");
   } catch (error) {
     setStatus(formatSaveError(error, "Markdown 保存"), "error");
   } finally {
@@ -1174,6 +1192,25 @@ async function runHomeEdit() {
     setStatus(`首页编排失败：${error.message}`, "error");
   } finally {
     homeAiLoading.value = false;
+  }
+}
+
+async function regenerateHomeFromMarkdown() {
+  if (!markdown.value.trim()) return;
+  homeRegenerating.value = true;
+  try {
+    const result = await previewMarkdownBriefing(adminPassword.value, markdown.value);
+    homeBriefing.value = result;
+    homeSaved.value = false;
+    homeDirty.value = true;
+    setStatus(
+      result.aiConfigured ? "已基于当前 Markdown 重新生成首页草稿。" : "已基于当前 Markdown 生成本地首页草稿；后端未配置 DeepSeek API Key。",
+      result.aiConfigured ? "success" : "warning",
+    );
+  } catch (error) {
+    setStatus(`首页重新生成失败：${error.message}`, "error");
+  } finally {
+    homeRegenerating.value = false;
   }
 }
 
