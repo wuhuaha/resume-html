@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import secrets
+from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,8 +13,10 @@ from .briefing import (
     adjust_briefing_with_ai,
     clear_briefing_cache,
     generate_briefing,
+    generation_meta,
     local_briefing,
     merge_briefing,
+    profile_source_hash,
     read_briefing_override,
     write_briefing_override,
 )
@@ -647,13 +650,20 @@ async def normalize_home_briefing(profile: dict, briefing: dict) -> dict:
     normalized["generated"] = bool(briefing.get("generated", True))
     normalized["aiConfigured"] = deepseek_client.configured
     normalized["aiProvider"] = briefing.get("aiProvider") or deepseek_client.provider_label
-    normalized["generationMeta"] = briefing.get("generationMeta") or {
-        "status": "saved",
-        "generated": normalized["generated"],
-        "provider": normalized["aiProvider"],
-        "model": deepseek_client.model_for("chat"),
-        "cached": False,
-    }
+    source_hash = profile_source_hash(profile)
+    meta = briefing.get("generationMeta") or generation_meta(
+        status="saved",
+        generated=normalized["generated"],
+        provider=normalized["aiProvider"],
+        model=deepseek_client.model_for("chat"),
+        source_hash=source_hash,
+    )
+    meta["status"] = "saved"
+    meta["cached"] = False
+    meta["savedAt"] = datetime.now(timezone.utc).isoformat()
+    meta["sourceHash"] = source_hash
+    normalized["generationMeta"] = meta
+    normalized["sourceHash"] = source_hash
     return normalized
 
 
@@ -681,7 +691,7 @@ def local_answer(question: str, profile: dict) -> str:
     if any(token in q for token in ["语音", "ai", "agent", "llm", "智能"]):
         return (
             f"适合。{name}的主线集中在语音智能、AI Agent、ASR/TTS/KWS 和工程落地。"
-            "在欧瑞博的语音 Agent 项目里，资料记录了 P95 首 token 从 10s 降到 1s、"
+            "在欧瑞博的语音 Agent 项目里，资料记录了 P95 端到端首帧语音延迟从 10s 降到 1s、"
             "链路成本降低 95%、ASR/TTS 成本降低 60% 等结果。需要我展开技术难点吗？"
             "\n\n依据：工作经历 / 项目详情。"
         )
