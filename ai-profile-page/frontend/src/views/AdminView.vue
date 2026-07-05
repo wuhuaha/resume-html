@@ -1349,7 +1349,13 @@ async function runHomeEdit() {
     homeSaved.value = result.saved;
     homeDirty.value = true;
     finishHomeGeneration("idle", { response: result, briefing: result.briefing });
-    setStatus(result.aiConfigured ? `已通过 ${result.aiProvider || "LLM"} 生成首页编排草稿。` : "后端未配置 LLM API Key。", result.aiConfigured ? "success" : "warning");
+    const llmGenerated = isLlmGeneratedBriefing(result.briefing);
+    setStatus(
+      llmGenerated
+        ? `已通过 ${result.aiProvider || "LLM"} 生成首页编排草稿。`
+        : homeBriefingFallbackMessage(result.briefing),
+      llmGenerated ? "success" : "warning",
+    );
   } catch (error) {
     finishHomeGeneration("failed", { error: `首页编排失败：${error.message}` });
     setStatus(`首页编排失败：${error.message}`, "error");

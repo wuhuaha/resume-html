@@ -295,27 +295,44 @@ async def adjust_briefing_with_ai(
 当前首页 JSON：
 {json.dumps(current_briefing, ensure_ascii=False)}
 """
-    raw = await deepseek_client.chat(
-        [
-            {"role": "system", "content": "你只输出合法 JSON，且不得编造事实。"},
-            {"role": "user", "content": prompt},
-        ]
-    )
-    parsed = parse_json_object(raw)
-    merged = merge_briefing(fallback, parsed)
-    merged["generated"] = True
-    merged["aiConfigured"] = True
-    merged["aiProvider"] = deepseek_client.last_provider_label
-    merged["generationMeta"] = generation_meta(
-        status="generated",
-        generated=True,
-        provider=deepseek_client.last_provider_label,
-        model=deepseek_client.last_model,
-        source_hash=profile_source_hash(profile),
-    )
-    merged["sourceHash"] = profile_source_hash(profile)
-    polish_generated_copy(merged, fallback)
-    return merged
+    try:
+        raw = await deepseek_client.chat(
+            [
+                {"role": "system", "content": "你只输出合法 JSON，且不得编造事实。"},
+                {"role": "user", "content": prompt},
+            ]
+        )
+        parsed = parse_json_object(raw)
+        merged = merge_briefing(fallback, parsed)
+        merged["generated"] = True
+        merged["aiConfigured"] = True
+        merged["aiProvider"] = deepseek_client.last_provider_label
+        merged["generationMeta"] = generation_meta(
+            status="generated",
+            generated=True,
+            provider=deepseek_client.last_provider_label,
+            model=deepseek_client.last_model,
+            source_hash=profile_source_hash(profile),
+        )
+        merged["sourceHash"] = profile_source_hash(profile)
+        polish_generated_copy(merged, fallback)
+        return merged
+    except Exception as exc:
+        merged = merge_briefing(fallback, current_briefing)
+        merged["generated"] = bool(current_briefing.get("generated", False))
+        merged["aiConfigured"] = True
+        merged["aiProvider"] = deepseek_client.provider_label
+        merged["generationMeta"] = generation_meta(
+            status="fallback",
+            generated=False,
+            provider=deepseek_client.provider_label,
+            model=deepseek_client.model_for("chat"),
+            source_hash=profile_source_hash(profile),
+            error=summarize_generation_error(exc),
+        )
+        merged["sourceHash"] = profile_source_hash(profile)
+        polish_generated_copy(merged, fallback)
+        return merged
 
 
 def clear_briefing_cache() -> None:
