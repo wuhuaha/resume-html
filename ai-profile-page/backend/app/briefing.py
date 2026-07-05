@@ -254,11 +254,12 @@ async def generate_briefing(profile: dict[str, Any], *, use_override: bool = Tru
         merged["sourceHash"] = profile_source_hash(profile)
         _briefing_cache[cache_key] = merged
         return deepcopy(merged)
-    except Exception:
+    except Exception as exc:
         fallback["generationMeta"] = generation_meta(
             status="fallback",
             generated=False,
             source_hash=profile_source_hash(profile),
+            error=summarize_generation_error(exc),
         )
         _briefing_cache[cache_key] = fallback
         return deepcopy(fallback)
@@ -328,6 +329,7 @@ def generation_meta(
     provider: str = "",
     model: str = "",
     source_hash: str = "",
+    error: str = "",
 ) -> dict[str, Any]:
     return {
         "status": status,
@@ -337,7 +339,18 @@ def generation_meta(
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "cached": False,
         "sourceHash": source_hash,
+        "error": error,
     }
+
+
+def summarize_generation_error(exc: Exception) -> str:
+    name = type(exc).__name__
+    detail = str(exc).strip()
+    if name == "ReadTimeout":
+        return "模型接口响应超时，已回退为本地首页草稿。"
+    if detail:
+        return f"{name}: {detail[:180]}"
+    return f"{name}: 模型调用失败，已回退为本地首页草稿。"
 
 
 def profile_source_hash(profile: dict[str, Any]) -> str:
