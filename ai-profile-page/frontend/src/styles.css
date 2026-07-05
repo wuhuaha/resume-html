@@ -1206,6 +1206,86 @@ p {
   font-size: 0.9rem;
 }
 
+.resume-draft-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.export-flow-status {
+  display: grid;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--surface-soft) 82%, transparent);
+}
+
+.export-flow-status strong {
+  color: var(--ink);
+  font-size: 0.92rem;
+}
+
+.export-flow-status span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.export-flow-status.running {
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
+  background: var(--accent-soft);
+}
+
+.export-flow-status.ready {
+  border-color: rgba(21, 128, 61, 0.22);
+  background: rgba(240, 253, 244, 0.72);
+}
+
+.resume-draft-head,
+.draft-action-row,
+.resume-ai-edit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.resume-draft-head {
+  justify-content: space-between;
+}
+
+.resume-draft-head h2 {
+  margin-top: 4px;
+  color: var(--ink);
+  font-size: 1.18rem;
+  line-height: 1.2;
+}
+
+.resume-draft-editor textarea {
+  font-family: Consolas, "Microsoft YaHei", monospace;
+  line-height: 1.55;
+}
+
+.draft-action-row {
+  flex-wrap: wrap;
+}
+
+.resume-ai-edit {
+  align-items: stretch;
+}
+
+.resume-ai-edit .n-input {
+  flex: 1 1 auto;
+}
+
+.resume-ai-edit .n-button {
+  flex: 0 0 auto;
+  min-width: 118px;
+}
+
 .preview-panel {
   min-height: 720px;
 }
@@ -2200,6 +2280,8 @@ p {
   .admin-head-actions,
   .admin-switch-login,
   .admin-switch-form,
+  .resume-draft-head,
+  .resume-ai-edit,
   .preview-toolbar,
   .section-title,
   .export-cta {
@@ -2351,6 +2433,11 @@ p {
   }
 
   .resume-avatar-row .n-button {
+    width: 100%;
+  }
+
+  .draft-action-row .n-button,
+  .resume-ai-edit .n-button {
     width: 100%;
   }
 

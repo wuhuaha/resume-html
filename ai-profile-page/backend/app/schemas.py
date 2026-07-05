@@ -96,6 +96,35 @@ class ExportResponse(BaseModel):
     provider: str = ""
 
 
+class ResumeRenderRequest(BaseModel):
+    markdown: str = Field(min_length=1)
+    template: str = ""
+    mode: str = ""
+
+
+class ResumeRenderResponse(BaseModel):
+    html: str
+    markdown: str
+    filename: str
+    note: str
+
+
+class ResumeAiEditRequest(BaseModel):
+    markdown: str = Field(min_length=1)
+    instruction: str = Field(min_length=1)
+    jd: str = ""
+    direction: str = "语音 AI / 后端系统"
+    template: str = ""
+    mode: str = ""
+
+
+class ResumeAiEditResponse(BaseModel):
+    markdown: str
+    note: str
+    configured: bool
+    provider: str = ""
+
+
 class AdminLoginRequest(BaseModel):
     password: str = ""
 

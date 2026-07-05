@@ -151,6 +151,22 @@ export function exportResume(payload) {
   });
 }
 
+export function renderResume(payload) {
+  return request("/api/resume/render", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function aiEditResume(payload) {
+  return request("/api/resume/ai-edit", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getResumeExportConfig() {
   return request("/api/resume/export-config");
 }

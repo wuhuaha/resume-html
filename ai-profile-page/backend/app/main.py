@@ -46,8 +46,12 @@ from .schemas import (
     MarkdownDocumentResponse,
     MarkdownSaveRequest,
     ReindexResponse,
+    ResumeAiEditRequest,
+    ResumeAiEditResponse,
     ResumeExportConfigResponse,
     ResumeExportConfigSaveRequest,
+    ResumeRenderRequest,
+    ResumeRenderResponse,
     ResumeAvatarResponse,
     SiteStyleResponse,
     SiteStyleSaveRequest,
@@ -388,6 +392,86 @@ async def export_resume_html(request: ExportRequest) -> str:
     return result.html
 
 
+@app.post("/api/resume/render", response_model=ResumeRenderResponse)
+async def render_resume(request: ResumeRenderRequest) -> ResumeRenderResponse:
+    html, normalized_markdown, template, mode = render_resume_markdown(
+        request.markdown,
+        request.template,
+        request.mode,
+    )
+    return ResumeRenderResponse(
+        html=html,
+        markdown=normalized_markdown,
+        filename=f"wangtao-{template['key']}-{mode['key']}.html",
+        note="已按当前 Markdown 草稿刷新 HTML/PDF 预览，未调用模型。",
+    )
+
+
+@app.post("/api/resume/ai-edit", response_model=ResumeAiEditResponse)
+async def ai_edit_resume(request: ResumeAiEditRequest) -> ResumeAiEditResponse:
+    profile = profile_data()
+    export_config = read_resume_export_config(settings.resolved_resume_export_config_path)
+    mode = active_resume_mode(export_config, request.mode)
+    template = active_resume_template(export_config, request.template)
+    if not deepseek_client.configured:
+        return ResumeAiEditResponse(
+            markdown=request.markdown,
+            note="后端未配置 LLM API Key，已保留当前 Markdown 草稿。",
+            configured=False,
+            provider=deepseek_client.provider_label,
+        )
+
+    system_prompt = (
+        "你是严谨的简历 Markdown 编辑助手。只能基于候选人资料和用户提供的当前简历草稿做压缩、重排、润色和重点调整，"
+        "不得新增未经资料支持的经历、成果、数字、技能、公司或时间。"
+        "必须保留姓名、电话、邮箱、所在地、学历等基础信息；资料中有出生日期且当前篇幅模式允许时必须保留。"
+        "输出完整 Markdown 简历，不要解释，不要代码围栏。"
+    )
+    context = knowledge_context(profile)
+    prompt = f"""
+候选人资料：
+{context}
+
+岗位 JD：
+{request.jd}
+
+目标方向：{request.direction}
+篇幅策略：{mode['label']}；目标页数：{mode['targetPages'] or '不限'}；
+核心能力最多 {mode['skillCount']} 条；每段经历最多 {mode['experienceBullets']} 条；
+项目最多 {mode['projectCount']} 个，每项目最多 {mode['projectBullets']} 条。
+模板策略：{template['label']}；{template.get('llmInstruction', '')}
+
+用户调整说明：
+{request.instruction}
+
+当前 Markdown 草稿：
+{request.markdown}
+""".strip()
+    try:
+        edited = await deepseek_client.chat(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            purpose="export",
+        )
+        edited = compact_resume_markdown(strip_markdown_fence(edited), mode)
+        edited = ensure_resume_header_metadata(edited, profile, mode)
+        return ResumeAiEditResponse(
+            markdown=edited,
+            note=f"已通过 {deepseek_client.last_provider_label} 按说明调整 Markdown 草稿，请刷新预览后确认版式。",
+            configured=True,
+            provider=deepseek_client.last_provider_label,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return ResumeAiEditResponse(
+            markdown=request.markdown,
+            note=f"{summarize_llm_error(exc)} 已保留当前 Markdown 草稿。",
+            configured=False,
+            provider=deepseek_client.provider_label,
+        )
+
+
 @app.post("/api/admin/login", response_model=AdminLoginResponse)
 async def admin_login(request: AdminLoginRequest) -> AdminLoginResponse:
     if settings.showcase_mode:
@@ -698,6 +782,23 @@ def strip_markdown_fence(text: str) -> str:
     if lines and lines[-1].strip() == "```":
         lines = lines[:-1]
     return "\n".join(lines).strip()
+
+
+def render_resume_markdown(markdown_text: str, template_key: str, mode_key: str) -> tuple[str, str, dict, dict]:
+    profile = profile_data()
+    export_config = read_resume_export_config(settings.resolved_resume_export_config_path)
+    mode = active_resume_mode(export_config, mode_key)
+    template = active_resume_template(export_config, template_key)
+    normalized_markdown = ensure_resume_header_metadata(markdown_text, profile, mode)
+    avatar_data = resume_avatar_data_url() if mode.get("includeAvatar") and template.get("showAvatar") else ""
+    html = markdown_to_resume_html(
+        normalized_markdown,
+        template=template,
+        mode=mode,
+        avatar_data_url=avatar_data,
+        branding=export_config.get("branding", {}),
+    )
+    return html, normalized_markdown, template, mode
 
 
 def local_answer(question: str, profile: dict) -> str:
